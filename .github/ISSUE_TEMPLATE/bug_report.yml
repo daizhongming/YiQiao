@@ -1,0 +1,60 @@
+# This file was modified in 2026 by YiQiao contributors. See NOTICE.
+
+name: Bug report
+description: Report reproducible incorrect behavior in YiQiao
+labels: ["bug"]
+
+body:
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      description: Which YiQiao component is affected?
+      options:
+        - REST API
+        - Dashboard
+        - Docker Compose deployment
+        - Python memory core
+        - Authentication and access control
+        - Import and export
+        - Graph memory
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Include the smallest reproducible example and remove credentials or private data.
+      value: |
+        ### Summary
+
+        ### Steps to reproduce
+
+        ### Expected behavior
+
+        ### Actual behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      value: |
+        - YiQiao version or commit:
+        - Deployment method:
+        - Docker and Compose versions:
+        - Operating system:
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety check
+      options:
+        - label: I removed API keys, passwords, tokens, personal data, and private memory content.
+          required: true

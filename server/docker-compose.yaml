@@ -1,0 +1,125 @@
+# This file was modified in 2026 by YiQiao contributors. See NOTICE.
+
+name: yiqiao-v3
+
+services:
+  yiqiao:
+    image: ${YIQIAO_API_IMAGE:-ghcr.io/daizhongming/yiqiao-api:latest}
+    pull_policy: ${YIQIAO_PULL_POLICY:-always}
+    restart: unless-stopped
+    init: true
+    env_file:
+      - .env
+    environment:
+      APP_DB_NAME: ${APP_DB_NAME:-yiqiao_app}
+      AUTH_DISABLED: ${AUTH_DISABLED:-false}
+      DASHBOARD_URL: ${PUBLIC_DASHBOARD_URL:-http://localhost:${DASHBOARD_PORT:-3000}}
+      DASHBOARD_URLS: ${DASHBOARD_URLS:-${PUBLIC_DASHBOARD_URL:-http://localhost:${DASHBOARD_PORT:-3000}}}
+      JWT_SECRET: ${JWT_SECRET:?Run scripts/init.sh or scripts/init.ps1 before starting YiQiao}
+      MEM0_TELEMETRY: ${MEM0_TELEMETRY:-false}
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONUNBUFFERED: "1"
+      YIQIAO_POSTHOG_API_KEY: ${YIQIAO_POSTHOG_API_KEY:-}
+      YIQIAO_POSTHOG_HOST: ${YIQIAO_POSTHOG_HOST:-https://us.i.posthog.com}
+      YIQIAO_TELEMETRY: ${YIQIAO_TELEMETRY:-false}
+    ports:
+      - "${API_BIND_ADDRESS:-127.0.0.1}:${API_PORT:-8888}:8000"
+    networks:
+      - frontend
+      - backend
+    volumes:
+      - ./history:/app/history
+    depends_on:
+      postgres:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=3).read()
+      interval: 10s
+      timeout: 5s
+      start_period: 60s
+      retries: 12
+    stop_grace_period: 30s
+
+  postgres:
+    image: pgvector/pgvector:pg17
+    pull_policy: missing
+    restart: unless-stopped
+    shm_size: "128mb"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Run scripts/init.sh or scripts/init.ps1 before starting YiQiao}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+    networks:
+      - backend
+    volumes:
+      - postgres_db:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -q -d $${POSTGRES_DB} -U $${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 5s
+      start_period: 10s
+      retries: 12
+    stop_grace_period: 30s
+
+  neo4j:
+    image: neo4j:5-community
+    pull_policy: missing
+    restart: unless-stopped
+    environment:
+      NEO4J_AUTH: ${NEO4J_USERNAME:-neo4j}/${NEO4J_PASSWORD:?Run scripts/init.sh or scripts/init.ps1 before starting YiQiao}
+    networks:
+      - backend
+    volumes:
+      - neo4j_data:/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - cypher-shell -u "$${NEO4J_USERNAME:-neo4j}" -p "$${NEO4J_AUTH#*/}" "RETURN 1" >/dev/null 2>&1
+      interval: 15s
+      timeout: 10s
+      start_period: 60s
+      retries: 12
+    stop_grace_period: 60s
+
+  yiqiao-dashboard:
+    image: ${YIQIAO_DASHBOARD_IMAGE:-ghcr.io/daizhongming/yiqiao-dashboard:latest}
+    pull_policy: ${YIQIAO_PULL_POLICY:-always}
+    restart: unless-stopped
+    init: true
+    environment:
+      API_INTERNAL_URL: http://yiqiao:8000
+      DASHBOARD_URL: ${PUBLIC_DASHBOARD_URL:-http://localhost:${DASHBOARD_PORT:-3000}}
+      NEXT_PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:${API_PORT:-8888}}
+      NEXT_PUBLIC_INSTANCE_NAME: ${YIQIAO_INSTANCE_NAME:-YiQiao}
+    ports:
+      - "${DASHBOARD_BIND_ADDRESS:-127.0.0.1}:${DASHBOARD_PORT:-3000}:3000"
+    networks:
+      - frontend
+    depends_on:
+      yiqiao:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/health"]
+      interval: 10s
+      timeout: 5s
+      start_period: 30s
+      retries: 6
+    stop_grace_period: 30s
+
+volumes:
+  postgres_db:
+  neo4j_data:
+
+networks:
+  frontend:
+    driver: bridge
+  backend:
+    driver: bridge
+    internal: true

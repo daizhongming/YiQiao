@@ -1,0 +1,19 @@
+# Source-build override. The base file remains the authoritative runtime
+# configuration so locally built images behave like the published images.
+services:
+  yiqiao:
+    pull_policy: build
+    build:
+      context: ..
+      dockerfile: server/Dockerfile
+      args:
+        DEBIAN_MIRROR: ${DEBIAN_MIRROR:-https://deb.debian.org}
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.org/simple}
+
+  yiqiao-dashboard:
+    pull_policy: build
+    build:
+      context: ..
+      dockerfile: server/dashboard/Dockerfile
+      args:
+        NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmjs.org}

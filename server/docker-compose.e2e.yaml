@@ -1,0 +1,54 @@
+# Deterministic release-test overlay. It uses isolated named storage and a
+# local OpenAI-compatible provider so smoke tests never contact external APIs.
+services:
+  model-stub:
+    image: python:3.12-alpine
+    pull_policy: missing
+    init: true
+    read_only: true
+    command: ["python", "/opt/yiqiao/openai_stub.py"]
+    environment:
+      STUB_EMBEDDING_DIMS: "16"
+    volumes:
+      - ../tests/e2e/openai_stub.py:/opt/yiqiao/openai_stub.py:ro
+    networks:
+      - backend
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=2).read()
+      interval: 2s
+      timeout: 2s
+      start_period: 2s
+      retries: 15
+
+  yiqiao:
+    environment:
+      APP_DB_NAME: yiqiao_app
+      AUTH_DISABLED: "false"
+      EMBEDDING_API_KEY: ${YIQIAO_E2E_PROVIDER_KEY:-local-e2e-only}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required for the E2E stack}
+      LLM_API_KEY: ${YIQIAO_E2E_PROVIDER_KEY:-local-e2e-only}
+      YIQIAO_DEFAULT_INFER: "false"
+      YIQIAO_EMBEDDER_BASE_URL: http://model-stub:8080/v1
+      YIQIAO_EMBEDDER_DIMS: "16"
+      YIQIAO_EMBEDDER_MODEL: yiqiao-e2e-embedding
+      YIQIAO_EMBEDDER_PROVIDER: openai
+      YIQIAO_LLM_BASE_URL: http://model-stub:8080/v1
+      YIQIAO_LLM_MODEL: yiqiao-e2e
+      YIQIAO_LLM_PROVIDER: openai
+      NEO4J_ENABLED: "false"
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD:?NEO4J_PASSWORD is required for the E2E stack}
+      OPENAI_API_KEY: ${YIQIAO_E2E_PROVIDER_KEY:-local-e2e-only}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required for the E2E stack}
+      YIQIAO_TELEMETRY: "false"
+    volumes:
+      - yiqiao_e2e_history:/app/history
+    depends_on:
+      model-stub:
+        condition: service_healthy
+
+volumes:
+  yiqiao_e2e_history:

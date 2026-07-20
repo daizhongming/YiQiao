@@ -1,0 +1,17 @@
+YiQiao
+Copyright 2026 YiQiao contributors
+
+YiQiao includes software derived from the Mem0 open-source project:
+
+  Mem0
+  https://github.com/mem0ai/mem0
+
+The upstream software was obtained under the Apache License, Version 2.0.
+YiQiao modifications made in 2026 are also provided under the Apache License,
+Version 2.0. See the LICENSE file for the complete terms. Modified upstream
+files carry a per-file statement, and MODIFICATIONS.md records their paths and
+the enforced notice formats.
+
+YiQiao is an independent derivative work. It is not sponsored by, endorsed by,
+or an official distribution of the upstream project. Upstream project names and
+marks remain the property of their respective owners.

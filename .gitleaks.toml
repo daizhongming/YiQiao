@@ -1,0 +1,9 @@
+title = "YiQiao Gitleaks configuration"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Allow only the exact adjacent empty provider-key match"
+regexTarget = "match"
+regexes = ['''\AOPENAI_API_KEY=\r?\nANTHROPIC_API_KEY=\r?\z''']

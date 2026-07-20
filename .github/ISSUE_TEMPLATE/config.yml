@@ -1,0 +1,10 @@
+# This file was modified in 2026 by YiQiao contributors. See NOTICE.
+
+blank_issues_enabled: false
+contact_links:
+  - name: YiQiao documentation
+    url: https://github.com/daizhongming/YiQiao/tree/main/docs/yiqiao
+    about: Read the deployment, operations, migration, and troubleshooting guides.
+  - name: Report a security vulnerability
+    url: https://github.com/daizhongming/YiQiao/security/policy
+    about: Follow the private reporting process instead of opening a public issue.

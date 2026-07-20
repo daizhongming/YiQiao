@@ -1,0 +1,29 @@
+# This file was modified in 2026 by YiQiao contributors. See NOTICE.
+
+name: Documentation issue
+description: Report incorrect or missing YiQiao documentation
+labels: ["documentation"]
+
+body:
+  - type: input
+    id: page
+    attributes:
+      label: Page or file
+      description: Link to the page or repository file that needs attention.
+      placeholder: https://github.com/daizhongming/YiQiao/blob/main/docs/yiqiao/...
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: Explain what is incorrect, unclear, or missing.
+    validations:
+      required: true
+
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: Suggested change
+      description: Describe the expected wording or workflow when possible.

@@ -1,0 +1,15 @@
+# This file was modified in 2026 by YiQiao contributors. See NOTICE.
+
+.git
+.env
+.env.*
+!.env.example
+.next
+.playwright-cli
+.turbo
+coverage
+node_modules
+out
+output
+*.log
+*.tsbuildinfo

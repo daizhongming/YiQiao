@@ -1,0 +1,46 @@
+# This file was modified in 2026 by YiQiao contributors. See NOTICE.
+
+name: Feature request
+description: Propose an improvement to self-hosted YiQiao
+labels: ["enhancement"]
+
+body:
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      description: Which YiQiao component would change?
+      options:
+        - REST API
+        - Dashboard
+        - Docker Compose deployment
+        - Python memory core
+        - Authentication and access control
+        - Import and export
+        - Graph memory
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: use_case
+    attributes:
+      label: Use case
+      description: Describe the operator or user problem, including self-hosting constraints.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Explain the expected behavior and compatibility impact.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: List current workarounds or other approaches.

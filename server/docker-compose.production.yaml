@@ -1,0 +1,46 @@
+# Production hardening overlay. Use with docker-compose.yaml; it intentionally
+# forces authentication on even if a development .env disables it.
+services:
+  yiqiao:
+    pull_policy: always
+    environment:
+      AUTH_DISABLED: "false"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    logging:
+      driver: json-file
+      options:
+        max-file: "5"
+        max-size: 10m
+
+  postgres:
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-file: "5"
+        max-size: 10m
+
+  neo4j:
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-file: "5"
+        max-size: 10m
+
+  yiqiao-dashboard:
+    pull_policy: always
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    logging:
+      driver: json-file
+      options:
+        max-file: "5"
+        max-size: 10m
