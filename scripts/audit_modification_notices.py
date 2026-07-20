@@ -250,9 +250,7 @@ def _ensure_base_commit(root: Path, *, fetch_base: bool = False) -> None:
         if available.returncode == 0:
             return
 
-    raise AuditError(
-        f"upstream base {BASE_COMMIT} is unavailable; rerun with --fetch-base"
-    )
+    raise AuditError(f"upstream base {BASE_COMMIT} is unavailable; rerun with --fetch-base")
 
 
 def modified_paths(root: Path, *, fetch_base: bool = False) -> list[Path]:
