@@ -1526,6 +1526,9 @@ def test_graph_retry_increments_persisted_attempt_count(import_server, monkeypat
         graph_attempts=1,
     )
     retried = threading.Event()
+    terminal_persisted = threading.Event()
+    release_terminal_update = threading.Event()
+    original_update = server_main.import_jobs.update
 
     def sync_graph(job_id, *, include_failed=False, lease_owner=None):
         assert job_id == job.id
@@ -1534,22 +1537,27 @@ def test_graph_retry_increments_persisted_attempt_count(import_server, monkeypat
         retried.set()
         return "completed"
 
+    def block_after_terminal_update(job_id, **changes):
+        result = original_update(job_id, **changes)
+        if changes.get("status") in {"completed", "completed_with_errors"}:
+            terminal_persisted.set()
+            release_terminal_update.wait(5)
+        return result
+
     monkeypatch.setattr(server_main, "_sync_import_graph", sync_graph)
+    monkeypatch.setattr(server_main.import_jobs, "update", block_after_terminal_update)
 
     response = client.post(f"/memory-imports/{job.id}/graph-retry")
     assert response.status_code == 200
     assert retried.wait(2)
-    deadline = time.monotonic() + 2
-    result = response.json()
-    while time.monotonic() < deadline:
+    assert terminal_persisted.wait(2)
+    try:
         result = client.get(f"/memory-imports/{job.id}").json()
-        if result["status"] == "completed":
-            break
-        time.sleep(0.01)
-
-    assert result["status"] == "completed"
-    assert result["graph_attempts"] == 2
-    assert result["metrics"]["phase_durations_ms"]["neo4j"] >= 0
+        assert result["status"] == "completed"
+        assert result["graph_attempts"] == 2
+        assert result["metrics"]["phase_durations_ms"]["neo4j"] >= 0
+    finally:
+        release_terminal_update.set()
 
 
 def test_graph_retry_rejects_an_active_import(import_server):

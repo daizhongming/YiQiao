@@ -3427,6 +3427,7 @@ def retry_memory_import(
 def _run_graph_retry(job_id: str, lease_owner: str) -> None:
     lease_stop = threading.Event()
     lease_lost = threading.Event()
+    graph_phase_recorded = False
     lease_thread = threading.Thread(
         target=_renew_memory_import_lease,
         args=(job_id, lease_owner, lease_stop, lease_lost),
@@ -3434,6 +3435,21 @@ def _run_graph_retry(job_id: str, lease_owner: str) -> None:
         daemon=True,
     )
     graph_started = time.perf_counter()
+
+    def record_graph_phase() -> None:
+        nonlocal graph_phase_recorded
+        if graph_phase_recorded:
+            return
+        if lease_lost.is_set():
+            raise ImportLeaseLost(job_id, lease_owner)
+        import_jobs.record_phase(
+            job_id,
+            "neo4j",
+            time.perf_counter() - graph_started,
+            lease_owner=lease_owner,
+        )
+        graph_phase_recorded = True
+
     lease_thread.start()
     try:
         import_jobs.increment(job_id, graph_attempts=1, lease_owner=lease_owner)
@@ -3452,6 +3468,7 @@ def _run_graph_retry(job_id: str, lease_owner: str) -> None:
             bool(job and job.source_retry_required),
             lease_owner=lease_owner,
         )
+        record_graph_phase()
         import_jobs.update(
             job_id,
             status=status,
@@ -3481,6 +3498,7 @@ def _run_graph_retry(job_id: str, lease_owner: str) -> None:
                     operation_phase="graph_sync",
                     lease_owner=lease_owner,
                 )
+                record_graph_phase()
                 import_jobs.update(
                     job_id,
                     status="completed_with_errors",
@@ -3494,16 +3512,13 @@ def _run_graph_retry(job_id: str, lease_owner: str) -> None:
             except Exception:
                 logging.warning("Memory import %s graph retry finalization failed", job_id, exc_info=True)
     finally:
-        if not lease_lost.is_set():
+        if not lease_lost.is_set() and not graph_phase_recorded:
             try:
-                import_jobs.record_phase(
-                    job_id,
-                    "neo4j",
-                    time.perf_counter() - graph_started,
-                    lease_owner=lease_owner,
-                )
+                record_graph_phase()
             except ImportLeaseLost:
                 lease_lost.set()
+            except Exception:
+                logging.warning("Memory import %s graph-retry metrics failed", job_id, exc_info=True)
         lease_stop.set()
         lease_thread.join(timeout=MEMORY_IMPORT_LEASE_RENEW_SECONDS + 1)
         try:
