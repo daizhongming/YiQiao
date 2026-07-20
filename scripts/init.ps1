@@ -24,7 +24,10 @@ function New-StrongSecret {
         $generator.Dispose()
     }
 
-    return [Convert]::ToBase64String($bytes).TrimEnd("=").Replace("+", "-").Replace("/", "_")
+    $encoded = [Convert]::ToBase64String($bytes).TrimEnd("=").Replace("+", "-").Replace("/", "_")
+
+    # neo4j-admin parses a password beginning with "-" as an option.
+    return "y$($encoded.Substring(0, 63))"
 }
 
 function Get-EnvironmentValue([string]$Key) {
@@ -96,6 +99,14 @@ foreach ($key in @("POSTGRES_PASSWORD", "NEO4J_PASSWORD", "JWT_SECRET")) {
     if (Set-MissingSecret $key) {
         $generatedKeys.Add($key)
     }
+}
+
+$neo4jPassword = (Get-EnvironmentValue "NEO4J_PASSWORD").Trim()
+if ($neo4jPassword.StartsWith('"') -or $neo4jPassword.StartsWith("'")) {
+    $neo4jPassword = $neo4jPassword.Substring(1)
+}
+if ($neo4jPassword.StartsWith("-", [System.StringComparison]::Ordinal)) {
+    throw "NEO4J_PASSWORD must not start with '-'; Neo4j interprets it as a command option."
 }
 New-Item -ItemType Directory -Path $HistoryDir -Force | Out-Null
 

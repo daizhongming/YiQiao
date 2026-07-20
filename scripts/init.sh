@@ -26,8 +26,10 @@ random_secret() {
   fi
 
   value=$(printf '%s' "$value" | tr '/+' '_-' | tr -d '=\r\n')
-  [ "${#value}" -ge 48 ] || fail "the system random-number generator returned an invalid secret"
-  printf '%s' "$value"
+  [ "${#value}" -ge 63 ] || fail "the system random-number generator returned an invalid secret"
+
+  # neo4j-admin parses a password beginning with "-" as an option.
+  printf 'y%.63s' "$value"
 }
 
 env_value() {
@@ -91,6 +93,13 @@ GENERATED_KEYS=""
 ensure_secret POSTGRES_PASSWORD
 ensure_secret NEO4J_PASSWORD
 ensure_secret JWT_SECRET
+
+neo4j_password=$(printf '%s' "$(env_value NEO4J_PASSWORD)" | tr -d '[:space:]')
+case "$neo4j_password" in
+  -*|\"-*|\'-*)
+    fail "NEO4J_PASSWORD must not start with '-'; Neo4j interprets it as a command option"
+    ;;
+esac
 mkdir -p "$HISTORY_DIR"
 
 command -v docker >/dev/null 2>&1 || fail "Docker is not installed or is not on PATH"

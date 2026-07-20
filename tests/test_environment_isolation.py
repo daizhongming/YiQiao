@@ -1,5 +1,7 @@
 import ast
 import os
+import shutil
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -9,6 +11,8 @@ from mem0.memory import setup as memory_setup
 from scripts import full_stack_smoke
 
 TESTS_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = TESTS_DIR.parent
+POWERSHELL = shutil.which("pwsh") or shutil.which("powershell.exe") or shutil.which("powershell")
 EXTERNAL_PROVIDER_TEST_CLASSES = {
     Path("vector_stores/test_e2e_threshold.py"): {
         "TestMilvusCosineThreshold",
@@ -30,6 +34,27 @@ EXTERNAL_PROVIDER_TEST_CLASSES = {
         "TestValkey",
     },
 }
+
+
+def _initializer_fixture(tmp_path: Path, script_name: str) -> tuple[Path, Path]:
+    root = tmp_path / script_name.replace(".", "-")
+    scripts_dir = root / "scripts"
+    server_dir = root / "server"
+    scripts_dir.mkdir(parents=True)
+    server_dir.mkdir()
+
+    script = scripts_dir / script_name
+    shutil.copyfile(PROJECT_ROOT / "scripts" / script_name, script)
+    script.chmod(0o755)
+    (server_dir / ".env.example").write_text(
+        "POSTGRES_PASSWORD=\nNEO4J_PASSWORD=\nJWT_SECRET=\n",
+        encoding="utf-8",
+    )
+    return root, script
+
+
+def _initializer_secrets(root: Path) -> dict[str, str]:
+    return full_stack_smoke._load_required_secrets(root / "server" / ".env")
 
 
 def _assigned_expression(tree: ast.Module, name: str) -> ast.expr:
@@ -149,6 +174,124 @@ def test_smoke_initializer_commands_are_platform_specific(monkeypatch, tmp_path)
     ]
     assert windows[-2:] == ["-EnvFile", str(env_file)]
     assert posix == ["sh", str(tmp_path / "scripts" / "init.sh")]
+
+
+@pytest.mark.skipif(os.name == "nt" or shutil.which("sh") is None, reason="requires a POSIX shell")
+def test_posix_initializer_normalizes_option_like_generated_secrets(tmp_path):
+    root, script = _initializer_fixture(tmp_path, "init.sh")
+    fake_bin = root / "fake-bin"
+    fake_bin.mkdir()
+    hostile_secret = "-" + ("A" * 70)
+
+    openssl = fake_bin / "openssl"
+    openssl.write_text(f"#!/bin/sh\nprintf '%s\\n' '{hostile_secret}'\n", encoding="utf-8")
+    openssl.chmod(0o755)
+    docker = fake_bin / "docker"
+    docker.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    docker.chmod(0o755)
+
+    env = os.environ.copy()
+    env["PATH"] = f"{fake_bin}{os.pathsep}{env.get('PATH', '')}"
+    result = subprocess.run(
+        ["sh", str(script)],
+        cwd=root,
+        env=env,
+        check=False,
+        text=True,
+        capture_output=True,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert set(_initializer_secrets(root).values()) == {f"y{hostile_secret[:63]}"}
+
+
+@pytest.mark.skipif(os.name == "nt" or shutil.which("sh") is None, reason="requires a POSIX shell")
+def test_posix_initializer_rejects_option_like_existing_neo4j_password(tmp_path):
+    root, script = _initializer_fixture(tmp_path, "init.sh")
+    (root / "server" / ".env").write_text(
+        "POSTGRES_PASSWORD=postgres-safe\nNEO4J_PASSWORD=-not-a-valid-neo4j-password\nJWT_SECRET=jwt-safe\n",
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        ["sh", str(script)],
+        cwd=root,
+        check=False,
+        text=True,
+        capture_output=True,
+    )
+
+    assert result.returncode != 0
+    assert "NEO4J_PASSWORD must not start with '-'" in result.stderr
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="requires PowerShell")
+def test_powershell_initializer_generates_neo4j_safe_secrets(tmp_path):
+    assert POWERSHELL is not None
+    root, script = _initializer_fixture(tmp_path, "init.ps1")
+    fake_bin = root / "fake-bin"
+    fake_bin.mkdir()
+    if os.name == "nt":
+        docker = fake_bin / "docker.cmd"
+        docker.write_text("@echo off\r\nexit /b 0\r\n", encoding="ascii")
+    else:
+        docker = fake_bin / "docker"
+        docker.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+        docker.chmod(0o755)
+
+    env = os.environ.copy()
+    env["PATH"] = f"{fake_bin}{os.pathsep}{env.get('PATH', '')}"
+    result = subprocess.run(
+        [
+            POWERSHELL,
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            str(script),
+            "-EnvFile",
+            str(root / "server" / ".env"),
+        ],
+        cwd=root,
+        env=env,
+        check=False,
+        text=True,
+        capture_output=True,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert all(value.startswith("y") and len(value) == 64 for value in _initializer_secrets(root).values())
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="requires PowerShell")
+def test_powershell_initializer_rejects_option_like_existing_neo4j_password(tmp_path):
+    assert POWERSHELL is not None
+    root, script = _initializer_fixture(tmp_path, "init.ps1")
+    env_file = root / "server" / ".env"
+    env_file.write_text(
+        "POSTGRES_PASSWORD=postgres-safe\nNEO4J_PASSWORD='-not-a-valid-neo4j-password'\nJWT_SECRET=jwt-safe\n",
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        [
+            POWERSHELL,
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            str(script),
+            "-EnvFile",
+            str(env_file),
+        ],
+        cwd=root,
+        check=False,
+        text=True,
+        capture_output=True,
+    )
+
+    assert result.returncode != 0
+    assert "NEO4J_PASSWORD must not start with '-'" in result.stderr
 
 
 @pytest.mark.parametrize("preexisting", [False, True])
