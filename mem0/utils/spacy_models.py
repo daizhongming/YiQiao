@@ -9,6 +9,7 @@ each loading their own copy from disk.
 """
 
 import logging
+import os
 import threading
 
 logger = logging.getLogger(__name__)
@@ -28,6 +29,13 @@ def _ensure_model_available():
         raise ImportError("spaCy is not installed. Install it with: pip install yiqiao-memory[nlp]")
 
     if not spacy.util.is_package("en_core_web_sm"):
+        if os.environ.get("YIQIAO_DISABLE_SPACY_DOWNLOAD", "").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }:
+            raise RuntimeError("spaCy model download is disabled by YIQIAO_DISABLE_SPACY_DOWNLOAD")
         logger.info("Downloading spaCy model en_core_web_sm...")
         try:
             from spacy.cli import download

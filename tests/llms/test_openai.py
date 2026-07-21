@@ -70,6 +70,37 @@ def test_openai_client_timeout_and_retries_forwarded():
         assert mock_openai.call_args.kwargs["max_retries"] == 0
 
 
+def test_whitespace_openrouter_key_does_not_override_openai(monkeypatch):
+    monkeypatch.setenv("OPENROUTER_API_KEY", "  \t")
+    monkeypatch.setenv("OPENAI_API_KEY", "openai-key")
+    monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
+    monkeypatch.delenv("OPENROUTER_API_BASE", raising=False)
+
+    with patch("mem0.llms.openai.OpenAI") as mock_openai:
+        OpenAILLM(OpenAIConfig(model="gpt-4.1-nano-2025-04-14"))
+
+    mock_openai.assert_called_once()
+    assert mock_openai.call_args.kwargs["api_key"] == "openai-key"
+    assert mock_openai.call_args.kwargs["base_url"] == "https://api.openai.com/v1"
+
+
+def test_whitespace_openrouter_key_does_not_change_request_params(monkeypatch, mock_openai_client):
+    monkeypatch.setenv("OPENROUTER_API_KEY", "  \t")
+    monkeypatch.delenv("OPENROUTER_API_BASE", raising=False)
+    config = OpenAIConfig(model="gpt-4.1-nano-2025-04-14", models=["fallback/model"])
+    llm = OpenAILLM(config)
+    response = Mock()
+    response.choices = [Mock(message=Mock(content="ok"))]
+    mock_openai_client.chat.completions.create.return_value = response
+
+    llm.generate_response([{"role": "user", "content": "Hello"}])
+
+    call_kwargs = mock_openai_client.chat.completions.create.call_args.kwargs
+    assert call_kwargs["model"] == "gpt-4.1-nano-2025-04-14"
+    assert "models" not in call_kwargs
+    assert "route" not in call_kwargs
+
+
 def test_generate_response_without_tools(mock_openai_client):
     config = OpenAIConfig(model="gpt-4.1-nano-2025-04-14", temperature=0.7, max_tokens=100, top_p=1.0)
     llm = OpenAILLM(config)

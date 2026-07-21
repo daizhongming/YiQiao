@@ -14,6 +14,12 @@ from mem0.llms.base import LLMBase
 from mem0.memory.utils import extract_json
 
 
+def _openrouter_api_key() -> Optional[str]:
+    """Return a usable OpenRouter key, ignoring whitespace-only environment values."""
+    value = os.environ.get("OPENROUTER_API_KEY")
+    return value.strip() if value and value.strip() else None
+
+
 class OpenAILLM(LLMBase):
     def __init__(self, config: Optional[Union[BaseLlmConfig, OpenAIConfig, Dict]] = None):
         # Convert to OpenAIConfig if needed
@@ -50,9 +56,10 @@ class OpenAILLM(LLMBase):
         if getattr(self.config, "max_retries", None) is not None:
             client_options["max_retries"] = self.config.max_retries
 
-        if os.environ.get("OPENROUTER_API_KEY"):  # Use OpenRouter
+        openrouter_api_key = _openrouter_api_key()
+        if openrouter_api_key:  # Use OpenRouter
             self.client = OpenAI(
-                api_key=os.environ.get("OPENROUTER_API_KEY"),
+                api_key=openrouter_api_key,
                 base_url=self.config.openrouter_base_url
                 or os.getenv("OPENROUTER_API_BASE")
                 or "https://openrouter.ai/api/v1",
@@ -124,7 +131,7 @@ class OpenAILLM(LLMBase):
             }
         )
 
-        if os.getenv("OPENROUTER_API_KEY"):
+        if _openrouter_api_key():
             openrouter_params = {}
             if self.config.models:
                 openrouter_params["models"] = self.config.models

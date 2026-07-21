@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from models import APIKey, QuotaPolicy, RequestLog, User
 from project_scope import get_project_id
 from pydantic import BaseModel, Field
-from server_state import get_memory_instance
+from server_state import ProviderConfigurationRequiredError, get_memory_instance
 from settings_store import get_json
 from sqlalchemy import case, delete, func, or_, select
 from sqlalchemy.orm import Session
@@ -187,6 +187,8 @@ def _count_project_memories(project_ids: list[str]) -> dict[str, int]:
             result = store.list(filters={"project_id": project_id}, top_k=1_000_000)
             rows = result[0] if result and isinstance(result, list) and isinstance(result[0], list) else result or []
             counts[project_id] = len(rows)
+    except ProviderConfigurationRequiredError:
+        raise
     except Exception:
         for project_id in project_ids:
             counts.setdefault(project_id, 0)

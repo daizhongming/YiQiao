@@ -187,6 +187,19 @@ class TestAuthDisabled:
         resp = self.client.post("/search", json={"query": "pizza", "user_id": "alice"})
         assert resp.status_code == 200
 
+    def test_memory_operation_reports_provider_setup_required(self, monkeypatch):
+        import server_state
+
+        monkeypatch.setattr(server_state, "_memory_instance", None)
+        monkeypatch.setattr(server_state, "_waiting_for_provider_credentials", True)
+
+        resp = self.client.post("/search", json={"query": "pizza", "user_id": "alice"})
+
+        assert resp.status_code == 503
+        assert resp.json() == {
+            "detail": "Model provider credentials are not configured. Complete provider setup before using memory operations."
+        }
+
     def test_update_memory_without_key(self):
         resp = self.client.put("/memories/mem-1", json={"text": "updated"})
         assert resp.status_code == 200
@@ -557,7 +570,7 @@ class TestAuthEdgeCases:
         assert resp.status_code == 200
         schema = resp.json()
         assert "paths" in schema
-        assert schema["info"]["version"] == "0.1.0"
+        assert schema["info"]["version"] == "0.1.1"
 
         resp = client.get("/docs")
         assert resp.status_code == 200

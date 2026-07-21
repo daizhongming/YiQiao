@@ -12,7 +12,7 @@ from models import RequestLog
 from project_scope import DEFAULT_PROJECT_ID, get_project_id
 from pydantic import BaseModel
 from schemas import MessageResponse
-from server_state import get_memory_instance
+from server_state import ProviderConfigurationRequiredError, get_memory_instance
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
@@ -143,6 +143,8 @@ def delete_entity(request: Request, entity_type: EntityType, entity_id: str, _au
         get_memory_instance().delete_all(
             **{TYPE_TO_FIELD[entity_type]: entity_id, "project_id": get_project_id(request)}
         )
+    except ProviderConfigurationRequiredError:
+        raise
     except Exception:
         raise upstream_error()
     return MessageResponse(message="Entity deleted")
