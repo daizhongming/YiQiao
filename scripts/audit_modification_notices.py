@@ -184,6 +184,7 @@ tests/test_public_branding_surfaces.py
 tests/test_release_legal_payload.py
 tests/test_requests_entities_routes.py
 tests/test_server_configuration.py
+tests/test_server_state.py
 tests/test_server_telemetry_privacy.py
 tests/test_settings_rbac_routes.py
 tests/test_usage_quotas.py

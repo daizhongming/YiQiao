@@ -12,7 +12,7 @@ from models import Settings
 from project_scope import DEFAULT_PROJECT_ID, get_project_id
 from pydantic import BaseModel, Field, field_validator, model_validator
 from routers import exports as exports_router
-from server_state import get_memory_instance
+from server_state import ProviderConfigurationRequiredError, get_memory_instance
 from settings_store import get_json, set_json
 from sqlalchemy.orm import Session
 
@@ -247,6 +247,8 @@ def _get_project_memory(memory_id: str, project_id: str) -> dict[str, Any]:
         raise HTTPException(status_code=404, detail="Memory not found.")
     except HTTPException:
         raise
+    except ProviderConfigurationRequiredError:
+        raise
     except Exception:
         raise HTTPException(status_code=503, detail="The memory database is unreachable.")
     if not memory or memory.get("project_id") != project_id:
@@ -301,6 +303,8 @@ def query_memories(
         return response
     except HTTPException:
         raise
+    except ProviderConfigurationRequiredError:
+        raise
     except Exception:
         raise HTTPException(status_code=503, detail="The memory database is unreachable.")
 
@@ -316,6 +320,8 @@ def memory_details(
     memory = _get_project_memory(memory_id, project_id)
     try:
         history = get_memory_instance().history(memory_id=memory_id)
+    except ProviderConfigurationRequiredError:
+        raise
     except Exception:
         history = []
     return {

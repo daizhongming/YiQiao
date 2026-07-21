@@ -219,6 +219,14 @@ def test_management_routes_remain_available_after_hard_limit(db):
     assert not getattr(request.state, "quota_checked", False)
 
 
+def test_usage_memory_count_does_not_hide_provider_setup_requirement(monkeypatch):
+    error = usage_router.ProviderConfigurationRequiredError("provider setup required")
+    monkeypatch.setattr(usage_router, "get_memory_instance", lambda: (_ for _ in ()).throw(error))
+
+    with pytest.raises(usage_router.ProviderConfigurationRequiredError, match="provider setup required"):
+        usage_router._count_project_memories(["project_a"])
+
+
 def test_usage_policy_routes_and_summary_use_real_events(monkeypatch):
     engine = create_engine(
         "sqlite:///:memory:",

@@ -97,6 +97,8 @@ from routers import usage as usage_router
 from routers import webhooks as webhooks_router
 from schemas import MessageResponse
 from server_state import (
+    IncompleteProviderConfigurationError,
+    ProviderConfigurationRequiredError,
     get_current_config,
     get_memory_instance,
     initialize_state,
@@ -198,9 +200,10 @@ POSTGRES_USER = os.environ.get("POSTGRES_USER", "postgres")
 POSTGRES_PASSWORD = os.environ.get("POSTGRES_PASSWORD", "")
 POSTGRES_COLLECTION_NAME = os.environ.get("POSTGRES_COLLECTION_NAME", "memories")
 
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
-ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
-GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY")
+OPENAI_API_KEY = (os.environ.get("OPENAI_API_KEY") or "").strip() or None
+ANTHROPIC_API_KEY = (os.environ.get("ANTHROPIC_API_KEY") or "").strip() or None
+GOOGLE_API_KEY = (os.environ.get("GOOGLE_API_KEY") or "").strip() or None
+OPENROUTER_API_KEY = (os.environ.get("OPENROUTER_API_KEY") or "").strip() or None
 LLM_API_KEY = os.environ.get("LLM_API_KEY", "").strip()
 EMBEDDING_API_KEY = os.environ.get("EMBEDDING_API_KEY", "").strip()
 HISTORY_DB_PATH = os.environ.get("HISTORY_DB_PATH", "/app/history/history.db")
@@ -526,7 +529,23 @@ if reranker_config is not None:
 set_session_factory(SessionLocal)
 import_repository = ImportRepository(SessionLocal)
 import_jobs.configure_repository(import_repository)
-initialize_state(DEFAULT_CONFIG)
+initialize_state(
+    DEFAULT_CONFIG,
+    credential_required_providers=set(BUNDLED_LLM_PROVIDERS) | set(BUNDLED_EMBEDDER_PROVIDERS),
+    provider_credential_fallbacks={
+        "llm:openai": OPENAI_API_KEY or OPENROUTER_API_KEY,
+        "embedder:openai": OPENAI_API_KEY,
+        "llm:anthropic": ANTHROPIC_API_KEY,
+        "llm:gemini": GOOGLE_API_KEY
+        or os.environ.get("GOOGLE_GENAI_USE_VERTEXAI", "").strip().lower() in {"1", "true", "yes", "on"},
+        "embedder:gemini": GOOGLE_API_KEY
+        or os.environ.get("GOOGLE_GENAI_USE_VERTEXAI", "").strip().lower() in {"1", "true", "yes", "on"},
+        "reranker:openai": OPENAI_API_KEY or OPENROUTER_API_KEY,
+        "reranker:anthropic": ANTHROPIC_API_KEY,
+        "reranker:gemini": GOOGLE_API_KEY
+        or os.environ.get("GOOGLE_GENAI_USE_VERTEXAI", "").strip().lower() in {"1", "true", "yes", "on"},
+    },
+)
 
 _import_threads: dict[str, threading.Thread] = {}
 _import_pending_leases: dict[str, str] = {}
@@ -550,12 +569,24 @@ app = FastAPI(
         "Authentication supports Bearer JWT, project API keys via `X-API-Key`, "
         "and the `ADMIN_API_KEY` environment variable."
     ),
-    version="0.1.0",
+    version="0.1.1",
     redirect_slashes=False,
 )
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_exception_handler(UpstreamError, upstream_error_handler)
+
+
+def _provider_configuration_required_handler(_request: Request, _exc: ProviderConfigurationRequiredError):
+    return JSONResponse(
+        status_code=503,
+        content={
+            "detail": "Model provider credentials are not configured. Complete provider setup before using memory operations."
+        },
+    )
+
+
+app.add_exception_handler(ProviderConfigurationRequiredError, _provider_configuration_required_handler)
 DASHBOARD_URL = os.environ.get("DASHBOARD_URL", "http://localhost:3000")
 DASHBOARD_URLS = [url.strip() for url in os.environ.get("DASHBOARD_URLS", DASHBOARD_URL).split(",") if url.strip()]
 app.add_middleware(
@@ -1430,7 +1461,10 @@ def test_model_configuration(req: ModelConfigurationTestRequest, _auth=Depends(r
 def set_config(config: Dict[str, Any], _auth=Depends(require_admin)):
     """Set memory configuration. Requires admin role."""
     _validate_bundled_providers(config)
-    update_config(config)
+    try:
+        update_config(config)
+    except IncompleteProviderConfigurationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {"message": "Configuration set successfully"}
 
 
@@ -1464,6 +1498,8 @@ def generate_instructions(req: GenerateInstructionsRequest, _auth=Depends(requir
         return {"custom_instructions": instructions, "test_message": test_message}
     except HTTPException:
         raise
+    except ProviderConfigurationRequiredError:
+        raise
     except Exception:
         raise upstream_error()
 
@@ -1496,6 +1532,8 @@ def generate_categories(req: GenerateCategoriesRequest, _auth=Depends(require_pr
         )
         return {"categories": _parse_generated_categories(response)}
     except HTTPException:
+        raise
+    except ProviderConfigurationRequiredError:
         raise
     except Exception:
         raise upstream_error()
@@ -1679,6 +1717,8 @@ def add_memory(request: Request, memory_create: MemoryCreate, _auth=Depends(requ
             },
         ) from exc
     except HTTPException:
+        raise
+    except ProviderConfigurationRequiredError:
         raise
     except (ValueError, MemoryValidationError) as e:
         raise _client_error(e)
@@ -3687,6 +3727,8 @@ def get_all_memories(
         return response
     except HTTPException:
         raise
+    except ProviderConfigurationRequiredError:
+        raise
     except Exception:
         raise upstream_error()
 
@@ -3700,6 +3742,8 @@ def get_memory(request: Request, memory_id: str, _auth=Depends(require_project_r
             raise HTTPException(status_code=404, detail="Memory not found.")
         return response
     except HTTPException:
+        raise
+    except ProviderConfigurationRequiredError:
         raise
     except Exception:
         raise upstream_error()
@@ -3747,6 +3791,8 @@ def search_memories(request: Request, search_req: SearchRequest, _auth=Depends(r
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except HTTPException:
+        raise
+    except ProviderConfigurationRequiredError:
         raise
     except Exception:
         raise upstream_error()
@@ -3807,6 +3853,8 @@ def update_memory(request: Request, memory_id: str, updated_memory: MemoryUpdate
         return response
     except HTTPException:
         raise
+    except ProviderConfigurationRequiredError:
+        raise
     except (ValueError, MemoryValidationError) as e:
         raise _client_error(e)
     except Exception:
@@ -3820,6 +3868,8 @@ def memory_history(request: Request, memory_id: str, _auth=Depends(require_proje
         _ensure_memory_project(memory_id, get_project_id(request))
         return get_memory_instance().history(memory_id=memory_id)
     except HTTPException:
+        raise
+    except ProviderConfigurationRequiredError:
         raise
     except (ValueError, MemoryValidationError) as e:
         raise _client_error(e)
@@ -3838,6 +3888,8 @@ def delete_memory(request: Request, memory_id: str, _auth=Depends(require_projec
         queue_webhook_event("memory.deleted", {"memory_id": memory_id}, get_project_id(request))
         return MessageResponse(message="Memory deleted successfully")
     except HTTPException:
+        raise
+    except ProviderConfigurationRequiredError:
         raise
     except (ValueError, MemoryValidationError) as e:
         raise _client_error(e)
@@ -3865,6 +3917,8 @@ def delete_all_memories(
         get_memory_instance().delete_all(**params)
         delete_graph_memories(get_project_id(request), params)
         return MessageResponse(message="All relevant memories deleted")
+    except ProviderConfigurationRequiredError:
+        raise
     except Exception:
         raise upstream_error()
 
@@ -3875,6 +3929,8 @@ def reset_memory(_auth=Depends(require_admin)):
     try:
         get_memory_instance().reset()
         return {"message": "All memories reset"}
+    except ProviderConfigurationRequiredError:
+        raise
     except Exception:
         raise upstream_error()
 

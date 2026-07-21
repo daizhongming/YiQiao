@@ -22,7 +22,7 @@ logging.basicConfig(level=logging.INFO)
 try:
     _YIQIAO_VERSION = version("yiqiao-memory")
 except PackageNotFoundError:
-    _YIQIAO_VERSION = "0.1.0+source"
+    _YIQIAO_VERSION = "0.1.1+source"
 
 _DRIVER_METADATA = DriverInfo(name="YiQiao", version=_YIQIAO_VERSION)
 

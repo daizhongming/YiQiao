@@ -5,7 +5,7 @@ import importlib.metadata
 try:
     __version__ = importlib.metadata.version("yiqiao-memory")
 except importlib.metadata.PackageNotFoundError:
-    __version__ = "0.1.0+source"
+    __version__ = "0.1.1+source"
 
 from mem0.memory.main import AsyncMemory, Memory
 

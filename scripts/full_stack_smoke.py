@@ -22,6 +22,56 @@ BUILD_COMPOSE = SERVER / "docker-compose.build.yaml"
 E2E_COMPOSE = SERVER / "docker-compose.e2e.yaml"
 ENV_FILE = SERVER / ".env"
 REQUIRED_SECRETS = ("POSTGRES_PASSWORD", "NEO4J_PASSWORD", "JWT_SECRET")
+PROVIDER_CREDENTIAL_ENV_NAMES = (
+    "OPENAI_API_KEY",
+    "ANTHROPIC_API_KEY",
+    "GOOGLE_API_KEY",
+    "LLM_API_KEY",
+    "EMBEDDING_API_KEY",
+    "RERANK_API_KEY",
+    "MEM0_LLM_API_KEY",
+    "MEM0_EMBEDDER_API_KEY",
+    "MEM0_RERANK_API_KEY",
+    "OPENROUTER_API_KEY",
+    "OPENROUTER_API_BASE",
+    "OPENAI_API_BASE",
+    "OPENAI_BASE_URL",
+    "GOOGLE_APPLICATION_CREDENTIALS",
+    "GOOGLE_CLOUD_LOCATION",
+    "GOOGLE_CLOUD_PROJECT",
+    "GOOGLE_GENAI_USE_VERTEXAI",
+    "MEMORY_IMPORT_LLM_PROVIDER",
+    "MEMORY_IMPORT_LLM_BASE_URL",
+    "MEMORY_IMPORT_LLM_API_KEY_ENV",
+    "YIQIAO_E2E_PROVIDER_KEY",
+)
+RUNTIME_ENV_NAMES = (
+    "ADMIN_API_KEY",
+    "APP_DB_NAME",
+    "DATABASE_URL",
+    "HISTORY_DB_PATH",
+    "MEM0_DIR",
+    "MEMORY_IMPORT_MODEL_TIERING_ENABLED",
+    "NEO4J_DATABASE",
+    "NEO4J_URI",
+    "NEO4J_USERNAME",
+    "POSTGRES_COLLECTION_NAME",
+    "POSTGRES_DB",
+    "POSTGRES_HOST",
+    "POSTGRES_PORT",
+    "POSTGRES_USER",
+    "YIQIAO_DIR",
+    "YIQIAO_DISABLE_SPACY_DOWNLOAD",
+)
+E2E_PROVIDER_KEY = "local-e2e-only"
+E2E_PROVIDER_BASE_URL = "http://model-stub:8080/v1"
+E2E_LLM_MODEL = "yiqiao-e2e"
+E2E_EMBEDDER_MODEL = "yiqiao-e2e-embedding"
+E2E_EMBEDDING_DIMS = 16
+EXPECTED_MIGRATION = "017"
+PROVIDER_SETUP_DETAIL = (
+    "Model provider credentials are not configured. Complete provider setup before using memory operations."
+)
 
 
 class SmokeError(RuntimeError):
@@ -133,12 +183,70 @@ def _memory_texts(response: Any) -> list[str]:
     ]
 
 
+def _configure_local_provider(api_url: str, access_token: str) -> None:
+    response = _request_json(
+        "POST",
+        f"{api_url}/configure",
+        payload={
+            "version": "v1.1",
+            "llm": {
+                "provider": "openai",
+                "config": {
+                    "api_key": E2E_PROVIDER_KEY,
+                    "openai_base_url": E2E_PROVIDER_BASE_URL,
+                    "model": E2E_LLM_MODEL,
+                },
+            },
+            "embedder": {
+                "provider": "openai",
+                "config": {
+                    "api_key": E2E_PROVIDER_KEY,
+                    "openai_base_url": E2E_PROVIDER_BASE_URL,
+                    "model": E2E_EMBEDDER_MODEL,
+                    "embedding_dims": E2E_EMBEDDING_DIMS,
+                },
+            },
+            "vector_store": {"config": {"embedding_model_dims": E2E_EMBEDDING_DIMS}},
+        },
+        headers={"Authorization": f"Bearer {access_token}"},
+        timeout=120,
+    )
+    if not isinstance(response, dict) or response.get("message") != "Configuration set successfully":
+        raise SmokeError(f"Local provider configuration was not accepted: {response!r}")
+
+
+def _assert_provider_setup_required(api_url: str, access_token: str) -> None:
+    request = urllib.request.Request(
+        f"{api_url}/search",
+        data=json.dumps({"query": "setup probe", "filters": {"user_id": "release-smoke-user"}}).encode("utf-8"),
+        headers={
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {access_token}",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=15) as response:
+            raise SmokeError(f"Provider setup probe unexpectedly returned HTTP {response.status}")
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")
+        if exc.code != 503:
+            raise SmokeError(f"Provider setup probe returned HTTP {exc.code}: {detail}") from exc
+        try:
+            payload = json.loads(detail)
+        except json.JSONDecodeError as error:
+            raise SmokeError(f"Provider setup probe returned invalid JSON: {detail}") from error
+        if payload != {"detail": PROVIDER_SETUP_DETAIL}:
+            raise SmokeError(f"Provider setup probe returned an unexpected response: {payload!r}")
+
+
 class Stack:
     def __init__(self, args: argparse.Namespace):
         self.args = args
         self.project = args.project_name
         self.env = os.environ.copy()
-        for key in REQUIRED_SECRETS:
+        for key in (*REQUIRED_SECRETS, *PROVIDER_CREDENTIAL_ENV_NAMES, *RUNTIME_ENV_NAMES):
             self.env.pop(key, None)
         self.env.update(
             {
@@ -148,7 +256,6 @@ class Stack:
                 "DASHBOARD_PORT": str(args.dashboard_port),
                 "YIQIAO_API_IMAGE": f"{self.project}-api:smoke",
                 "YIQIAO_DASHBOARD_IMAGE": f"{self.project}-dashboard:smoke",
-                "YIQIAO_E2E_PROVIDER_KEY": "local-e2e-only",
                 "YIQIAO_PULL_POLICY": "build",
             }
         )
@@ -238,8 +345,8 @@ def _assert_migration(stack: Stack) -> str:
         capture=True,
     )
     revision = result.stdout.strip()
-    if not revision:
-        raise SmokeError("Alembic did not record a migration revision")
+    if revision != EXPECTED_MIGRATION:
+        raise SmokeError(f"Expected Alembic migration {EXPECTED_MIGRATION}, found {revision or '<empty>'}")
     return revision
 
 
@@ -256,6 +363,9 @@ def _exercise_api(api_url: str, marker: str) -> tuple[str, str]:
     access_token = str(tokens.get("access_token") or "") if isinstance(tokens, dict) else ""
     if not access_token:
         raise SmokeError("Admin registration did not return an access token")
+
+    _assert_provider_setup_required(api_url, access_token)
+    _configure_local_provider(api_url, access_token)
 
     project_headers = {"Authorization": f"Bearer {access_token}", "X-Project-ID": "default-project"}
     created_key = _request_json(
@@ -309,7 +419,7 @@ def _assert_persisted(api_url: str, api_key: str, marker: str) -> None:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--project-name", default=f"yiqiao-release-smoke-{os.getpid()}")
+    parser.add_argument("--project-name", default=f"yiqiao-release-smoke-{os.getpid()}-{secrets.token_hex(4)}")
     parser.add_argument("--api-port", type=int, default=18888)
     parser.add_argument("--dashboard-port", type=int, default=13000)
     parser.add_argument("--timeout", type=float, default=420)
