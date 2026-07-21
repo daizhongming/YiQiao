@@ -19,9 +19,9 @@ Run `python scripts/audit_modification_notices.py` from a complete Git
 checkout to verify this list and every embedded notice. Unknown modified
 file formats fail closed.
 
-Modified upstream files: **214**
+Modified upstream files: **216**
 
-Path-list SHA-256: `586FAF614AAC58E73F23D8ED4033021F3B4FAF3ECBDB79639D134C8991E0AC9D`
+Path-list SHA-256: `25D0B7BAE1932CFFAACDC96F2AD7B085AFD101493FAACDF7D8DFEC11129B9D1C`
 
 ## Files
 
@@ -29,6 +29,7 @@ Path-list SHA-256: `586FAF614AAC58E73F23D8ED4033021F3B4FAF3ECBDB79639D134C8991E0
 - `.github/ISSUE_TEMPLATE/config.yml` (source comment)
 - `.github/ISSUE_TEMPLATE/documentation_issue.yml` (source comment)
 - `.github/ISSUE_TEMPLATE/feature_request.yml` (source comment)
+- `.github/PULL_REQUEST_TEMPLATE.md` (visible Markdown notice)
 - `.github/workflows/ci.yml` (source comment)
 - `.gitignore` (source comment)
 - `.pre-commit-config.yaml` (source comment)
@@ -37,6 +38,7 @@ Path-list SHA-256: `586FAF614AAC58E73F23D8ED4033021F3B4FAF3ECBDB79639D134C8991E0
 - `README.md` (visible Markdown notice)
 - `SECURITY.md` (visible Markdown notice)
 - `mem0/__init__.py` (source comment)
+- `mem0/configs/base.py` (source comment)
 - `mem0/configs/embeddings/base.py` (source comment)
 - `mem0/configs/llms/aws_bedrock.py` (source comment)
 - `mem0/configs/llms/openai.py` (source comment)

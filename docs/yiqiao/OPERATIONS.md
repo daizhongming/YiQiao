@@ -1,5 +1,7 @@
 # YiQiao Operations
 
+[简体中文](OPERATIONS.zh-CN.md) | **English**
+
 This runbook covers the supported single-host Docker Compose deployment. Run
 commands from the repository root unless a section says otherwise.
 

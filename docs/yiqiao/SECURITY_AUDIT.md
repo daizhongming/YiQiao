@@ -1,5 +1,7 @@
 # Secret Scanning
 
+**English** | [简体中文](SECURITY_AUDIT.zh-CN.md)
+
 YiQiao scans both the current source tree and the complete public Git history
 with Gitleaks 8.28.0. The release history starts with the target repository's
 placeholder commit and adds the reviewed YiQiao source as a single snapshot; it

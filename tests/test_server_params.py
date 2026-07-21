@@ -17,7 +17,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from mem0.exceptions import ValidationError as Mem0ValidationError
+from mem0.exceptions import ValidationError as MemoryValidationError
 
 pytest.importorskip("fastapi", reason="fastapi not installed")
 
@@ -1156,7 +1156,7 @@ class TestSearchValidationErrors:
 
 
 class TestWriteHandlerErrorMapping:
-    """ValueError("... not found") -> 404, other ValueError / Mem0ValidationError
+    """ValueError("... not found") -> 404, other ValueError / MemoryValidationError
     -> 400. A real outage still surfaces as 502 via upstream_error()."""
 
     def test_update_not_found_returns_404(self, client, mock_memory):
@@ -1176,7 +1176,7 @@ class TestWriteHandlerErrorMapping:
         assert resp.status_code == 400
 
     def test_add_validation_error_returns_400(self, client, mock_memory):
-        mock_memory.add.side_effect = Mem0ValidationError(
+        mock_memory.add.side_effect = MemoryValidationError(
             message="messages must be str, dict, or list[dict]", error_code="VALIDATION_003"
         )
         resp = client.post(

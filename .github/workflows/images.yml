@@ -13,6 +13,11 @@ on:
         required: true
         default: false
         type: boolean
+      version:
+        description: Version tag for the published images
+        required: true
+        default: v0.1.0
+        type: string
 
 permissions:
   contents: read
@@ -66,9 +71,77 @@ jobs:
           provenance: false
           sbom: false
 
+  validate-publish-version:
+    name: Validate publish version
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish == true && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Check out source
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          persist-credentials: false
+
+      - name: Validate version metadata
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import re
+          import tomllib
+
+          release_version = os.environ["RELEASE_VERSION"]
+          pattern = re.compile(r"v(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)")
+          if pattern.fullmatch(release_version) is None:
+              raise SystemExit("Version must use the strict vMAJOR.MINOR.PATCH format")
+
+          expected_version = release_version[1:]
+          with open("pyproject.toml", "rb") as pyproject_file:
+              pyproject_version = tomllib.load(pyproject_file)["project"]["version"]
+          with open("server/dashboard/package.json", encoding="utf-8") as package_file:
+              dashboard_version = json.load(package_file)["version"]
+
+          mismatches = []
+          if pyproject_version != expected_version:
+              mismatches.append(f"pyproject.toml has {pyproject_version!r}")
+          if dashboard_version != expected_version:
+              mismatches.append(f"server/dashboard/package.json has {dashboard_version!r}")
+          if mismatches:
+              raise SystemExit(
+                  f"Version {release_version!r} does not match: " + "; ".join(mismatches)
+              )
+
+          print(f"Validated {release_version} against both project version files")
+          PY
+
+      - name: Verify release tag targets this commit
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          tag_ref="refs/tags/${RELEASE_VERSION}"
+          if ! git show-ref --verify --quiet "$tag_ref"; then
+            echo "::error::Release tag ${RELEASE_VERSION} does not exist"
+            exit 1
+          fi
+          tag_commit="$(git rev-list --max-count=1 "$tag_ref")"
+          if [[ "$tag_commit" != "$GITHUB_SHA" ]]; then
+            echo "::error::Release tag ${RELEASE_VERSION} targets ${tag_commit}, not ${GITHUB_SHA}"
+            exit 1
+          fi
+          echo "Verified ${RELEASE_VERSION} at ${GITHUB_SHA}"
+
   publish:
     name: Publish ${{ matrix.name }} image
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish == true && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
+    needs: validate-publish-version
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     permissions:
@@ -114,6 +187,7 @@ jobs:
           tags: |
             ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}:latest
             ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}:${{ github.sha }}
+            ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}:${{ inputs.version }}
           no-cache: true
           pull: true
           provenance: mode=max

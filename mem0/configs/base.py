@@ -1,3 +1,5 @@
+# This file was modified in 2026 by YiQiao contributors. See NOTICE.
+
 import os
 from typing import Any, Dict, Optional
 
@@ -6,11 +8,12 @@ from pydantic import BaseModel, Field
 from mem0.configs.rerankers.config import RerankerConfig
 from mem0.embeddings.configs import EmbedderConfig
 from mem0.llms.configs import LlmConfig
+from mem0.utils.paths import resolve_yiqiao_dir
 from mem0.vector_stores.configs import VectorStoreConfig
 
-# Set up the directory path
-home_dir = os.path.expanduser("~")
-mem0_dir = os.environ.get("MEM0_DIR") or os.path.join(home_dir, ".mem0")
+yiqiao_dir = resolve_yiqiao_dir()
+# Kept as an internal alias for extensions that imported the old module global.
+mem0_dir = yiqiao_dir
 
 
 class MemoryItem(BaseModel):
@@ -41,7 +44,7 @@ class MemoryConfig(BaseModel):
     )
     history_db_path: str = Field(
         description="Path to the history database",
-        default=os.path.join(mem0_dir, "history.db"),
+        default=os.path.join(yiqiao_dir, "history.db"),
     )
     reranker: Optional[RerankerConfig] = Field(
         description="Configuration for the reranker",

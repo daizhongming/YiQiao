@@ -123,7 +123,7 @@ from workspace import (
     project_settings,
 )
 
-from mem0.exceptions import ValidationError as Mem0ValidationError
+from mem0.exceptions import ValidationError as MemoryValidationError
 from mem0.memory.main import MemoryOperationContext
 from mem0.utils.factory import EmbedderFactory, LlmFactory, RerankerFactory
 
@@ -539,12 +539,16 @@ _import_legacy_hashes_lock = threading.RLock()
 
 
 app = FastAPI(
-    title="YiQiao REST APIs",
+    title="YiQiao 记忆服务 API",
     description=(
-        "A REST API for managing and searching memories for your AI Agents and Apps.\n\n"
-        "## Authentication\n"
-        "Supports Bearer JWT tokens, per-user API keys via `X-API-Key` header, "
-        "or the legacy `ADMIN_API_KEY` environment variable. Set `AUTH_DISABLED=true` for local development only."
+        "面向 AI 助手与智能体的记忆管理和检索 API。\n\n"
+        "## 身份认证\n"
+        "支持 Bearer JWT、通过 `X-API-Key` 请求头传递的项目 API 密钥，"
+        "以及管理员环境变量 `ADMIN_API_KEY`。`AUTH_DISABLED=true` 仅用于本地开发。\n\n"
+        "---\n\n"
+        "REST API for managing and searching memories for AI assistants and agents. "
+        "Authentication supports Bearer JWT, project API keys via `X-API-Key`, "
+        "and the `ADMIN_API_KEY` environment variable."
     ),
     version="0.1.0",
     redirect_slashes=False,
@@ -1676,7 +1680,7 @@ def add_memory(request: Request, memory_create: MemoryCreate, _auth=Depends(requ
         ) from exc
     except HTTPException:
         raise
-    except (ValueError, Mem0ValidationError) as e:
+    except (ValueError, MemoryValidationError) as e:
         raise _client_error(e)
     except Exception:
         raise upstream_error()
@@ -3707,7 +3711,7 @@ def search_memories(request: Request, search_req: SearchRequest, _auth=Depends(r
     _set_request_log_context(request, "SEARCH", search_req.model_dump(mode="json", exclude_none=True))
     try:
         filters = search_req.filters or {}
-        # ponytail: flat project filter; add nested filter merging when mem0 exposes a shared filter parser.
+        # ponytail: flat project filter; add nested filter merging when the memory core exposes a shared parser.
         filters["project_id"] = get_project_id(request)
         deprecated_keys = []
         deprecated_values = search_req.model_dump(
@@ -3803,7 +3807,7 @@ def update_memory(request: Request, memory_id: str, updated_memory: MemoryUpdate
         return response
     except HTTPException:
         raise
-    except (ValueError, Mem0ValidationError) as e:
+    except (ValueError, MemoryValidationError) as e:
         raise _client_error(e)
     except Exception:
         raise upstream_error()
@@ -3817,7 +3821,7 @@ def memory_history(request: Request, memory_id: str, _auth=Depends(require_proje
         return get_memory_instance().history(memory_id=memory_id)
     except HTTPException:
         raise
-    except (ValueError, Mem0ValidationError) as e:
+    except (ValueError, MemoryValidationError) as e:
         raise _client_error(e)
     except Exception:
         raise upstream_error()
@@ -3835,7 +3839,7 @@ def delete_memory(request: Request, memory_id: str, _auth=Depends(require_projec
         return MessageResponse(message="Memory deleted successfully")
     except HTTPException:
         raise
-    except (ValueError, Mem0ValidationError) as e:
+    except (ValueError, MemoryValidationError) as e:
         raise _client_error(e)
     except Exception:
         raise upstream_error()

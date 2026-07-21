@@ -57,7 +57,7 @@ from mem0.memory.notices import (
     get_temporal_feature_error_message,
     get_temporal_feature_error_message_async,
 )
-from mem0.memory.setup import mem0_dir, setup_config
+from mem0.memory.setup import setup_config, yiqiao_dir
 from mem0.memory.storage import SQLiteManager
 from mem0.memory.telemetry import MEM0_TELEMETRY, capture_event
 from mem0.memory.utils import (
@@ -1012,7 +1012,7 @@ class Memory(MemoryBase):
             telemetry_config = _safe_deepcopy_config(self.config.vector_store.config)
             if self.config.vector_store.provider in ["faiss", "qdrant"]:
                 provider_path = f"migrations_{self.config.vector_store.provider}"
-                telemetry_config_dict["path"] = os.path.join(mem0_dir, provider_path)
+                telemetry_config_dict["path"] = os.path.join(yiqiao_dir, provider_path)
                 os.makedirs(telemetry_config_dict["path"], exist_ok=True)
 
             # Create the config object using the same class as the original
@@ -3339,7 +3339,7 @@ class AsyncMemory(MemoryBase):
             telemetry_config.collection_name = "mem0migrations"
             if self.config.vector_store.provider in ["faiss", "qdrant"]:
                 provider_path = f"migrations_{self.config.vector_store.provider}"
-                telemetry_config.path = os.path.join(mem0_dir, provider_path)
+                telemetry_config.path = os.path.join(yiqiao_dir, provider_path)
                 os.makedirs(telemetry_config.path, exist_ok=True)
             self._telemetry_vector_store = VectorStoreFactory.create(
                 self.config.vector_store.provider, telemetry_config

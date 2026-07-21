@@ -1,6 +1,7 @@
 import sys
 import threading
 import time
+import uuid
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -144,6 +145,30 @@ def test_exact_fit_succeeds_and_holds_lock_until_release(quota_database):
     assert guard.enabled is True
     assert len(result) == 1
     memory.vector_store.insert.assert_called_once()
+    guard.release()
+
+
+def test_postgres_quota_lock_preserves_legacy_namespace_for_rolling_upgrades():
+    session = MagicMock()
+    session.get_bind.return_value.dialect.name = "postgresql"
+    snapshot = {
+        "version": 1,
+        "policies": [
+            {
+                "id": str(uuid.uuid4()),
+                "scope_type": "project",
+                "scope_id": "default-project",
+                "limit_value": 10,
+            }
+        ],
+    }
+    guard = ImportStorageQuotaGuard(snapshot, lambda: session, lambda _project_id: 0, lambda _org_id: [])
+
+    guard(1)
+
+    advisory_calls = [call for call in session.execute.call_args_list if "pg_advisory" in str(call.args[0])]
+    assert len(advisory_calls) == 1
+    assert advisory_calls[0].args[1] == {"resource": "mem0:stored-memory:project:default-project"}
     guard.release()
 
 

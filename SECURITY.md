@@ -1,6 +1,8 @@
 # Security Policy
 > **Modification notice:** This file was modified in 2026 by YiQiao contributors. See NOTICE.
 
+[简体中文](SECURITY.zh-CN.md) | **English**
+
 ## Report a Vulnerability
 
 Do not disclose suspected vulnerabilities in a public issue, pull request,

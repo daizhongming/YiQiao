@@ -5,6 +5,10 @@ description: Propose an improvement to self-hosted YiQiao
 labels: ["enhancement"]
 
 body:
+  - type: markdown
+    attributes:
+      value: "[使用简体中文表单](https://github.com/daizhongming/YiQiao/issues/new?template=feature_request.zh-CN.yml)"
+
   - type: dropdown
     id: component
     attributes:

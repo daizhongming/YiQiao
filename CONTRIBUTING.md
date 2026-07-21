@@ -1,6 +1,8 @@
 # Contributing to YiQiao
 > **Modification notice:** This file was modified in 2026 by YiQiao contributors. See NOTICE.
 
+[简体中文](CONTRIBUTING.zh-CN.md) | **English**
+
 YiQiao accepts focused bug fixes, security hardening, documentation, tests, and
 features that improve the self-hosted API, dashboard, memory core, migrations,
 or operating experience.
@@ -20,16 +22,18 @@ repository's Apache License 2.0 unless explicitly stated otherwise.
 
 | Area               | Path                                      | Primary checks                               |
 | ------------------ | ----------------------------------------- | -------------------------------------------- |
-| Memory core        | `mem0/`                                   | Ruff, compile, pytest                        |
+| Python public API  | `yiqiao/`                                 | Ruff, compile, pytest                        |
+| Memory core        | Internal compatibility implementation    | Ruff, compile, pytest                        |
 | API and migrations | `server/`, `server/alembic/`              | Ruff, compile, pytest, Compose               |
 | Dashboard          | `server/dashboard/`                       | Prettier, TypeScript, Next.js build          |
 | Deployment         | `server/docker-compose*.yaml`, `scripts/` | Compose config, clean build, smoke test      |
 | Release docs       | root Markdown, `docs/yiqiao/`             | links, commands, branding and license review |
 
-The Python distribution is named `yiqiao-memory`, while the inherited `mem0`
-import namespace remains a compatibility interface. Do not rename compatibility
-identifiers or add new uses of the upstream brand without updating
-[BRANDING_EXCEPTIONS.md](BRANDING_EXCEPTIONS.md) and providing a migration plan.
+The Python distribution is named `yiqiao-memory`, and public code imports it
+through `yiqiao`. Internal compatibility identifiers protect existing data and
+implementations; do not expose them through new interfaces, examples, or product
+copy. Any compatibility-layer change requires an update to
+[BRANDING_EXCEPTIONS.md](BRANDING_EXCEPTIONS.md) and a migration plan.
 
 ## Development Setup
 
@@ -41,9 +45,13 @@ cd YiQiao
 ./scripts/init.sh
 ```
 
-On Windows PowerShell, use
-`powershell -ExecutionPolicy Bypass -File .\scripts\init.ps1` instead. The
-scripts do not replace an existing `server/.env`.
+On Windows PowerShell, use:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\init.ps1
+```
+
+The scripts do not replace an existing `server/.env`.
 
 For Python development:
 
@@ -69,16 +77,10 @@ pnpm install --frozen-lockfile
 Run the checks for every area you change. At minimum:
 
 ```bash
-python -m isort --check-only --profile black mem0 server tests scripts
-python -m ruff format --check mem0 server tests scripts
-python -m ruff check mem0 server tests scripts
-python -m compileall -q mem0 server scripts
+make format-check
+make lint
+make test
 python scripts/audit_modification_notices.py --fetch-base
-python -m pytest -q tests \
-  --ignore=tests/embeddings \
-  --ignore=tests/llms \
-  --ignore=tests/rerankers \
-  --ignore=tests/vector_stores
 ```
 
 Provider-adapter changes require the larger optional environment and its

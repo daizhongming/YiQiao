@@ -23,7 +23,7 @@ def test_admin_registration_telemetry_excludes_email_and_domain():
     )
 
     serialized = json.dumps(properties, sort_keys=True)
-    assert properties == {"server_version": telemetry.mem0.__version__}
+    assert properties == {"server_version": telemetry.yiqiao.__version__}
     assert "private-person" not in serialized
     assert "sensitive-company" not in serialized
 
@@ -37,7 +37,7 @@ def test_onboarding_telemetry_excludes_email_and_free_text_use_case():
     )
 
     serialized = json.dumps(properties, sort_keys=True)
-    assert properties == {"server_version": telemetry.mem0.__version__}
+    assert properties == {"server_version": telemetry.yiqiao.__version__}
     assert "private-person" not in serialized
     assert "sensitive-company" not in serialized
     assert "Nightfall" not in serialized

@@ -50,6 +50,12 @@ def test_packaging_configs_include_modification_record():
     pyproject = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     assert "MODIFICATIONS.md" in pyproject["project"]["license-files"]
 
+    build = pyproject["tool"]["hatch"]["build"]
+    assert "yiqiao/**/*.py" in build["include"]
+    assert "yiqiao/**/*.py" in build["targets"]["sdist"]["include"]
+    assert "yiqiao" in build["targets"]["wheel"]["packages"]
+    assert "yiqiao" in build["targets"]["wheel"]["only-include"]
+
     dockerfiles = (ROOT / "server" / "Dockerfile", ROOT / "server" / "dashboard" / "Dockerfile")
     dashboard_ignore = (ROOT / "server" / "dashboard" / "Dockerfile.dockerignore").read_text(encoding="utf-8")
 
@@ -71,7 +77,18 @@ def test_packaging_configs_include_modification_record():
         instruction == "COPY pyproject.toml README.md LICENSE NOTICE THIRD_PARTY_NOTICES.md MODIFICATIONS.md ./"
         for instruction in api_instructions
     )
+    assert "COPY yiqiao ./yiqiao" in api_instructions
     assert "!MODIFICATIONS.md" in dashboard_ignore.splitlines()
+
+
+def test_versioned_image_publication_is_bound_to_the_release_tag():
+    workflow = (ROOT / ".github" / "workflows" / "images.yml").read_text(encoding="utf-8")
+
+    assert "fetch-depth: 0" in workflow
+    assert "fetch-tags: true" in workflow
+    assert 'tag_ref="refs/tags/${RELEASE_VERSION}"' in workflow
+    assert '"$tag_commit" != "$GITHUB_SHA"' in workflow
+    assert "${{ inputs.version }}" in workflow
 
 
 def test_git_name_status_includes_rename_and_copy_destinations():

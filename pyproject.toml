@@ -7,7 +7,7 @@ build-backend = "hatchling.build"
 [project]
 name = "yiqiao-memory"
 version = "0.1.0"
-description = "Self-hosted memory core used by the YiQiao API"
+description = "YiQiao 自托管 AI 记忆核心 / Self-hosted AI memory core"
 authors = [
     { name = "YiQiao Contributors" }
 ]
@@ -118,15 +118,23 @@ pythonpath = ["."]
 [tool.hatch.build]
 include = [
     "mem0/**/*.py",
+    "yiqiao/**/*.py",
 ]
 exclude = [
     "**/*",
     "!mem0/**/*.py",
+    "!yiqiao/**/*.py",
+]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "mem0/**/*.py",
+    "yiqiao/**/*.py",
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["mem0"]
-only-include = ["mem0"]
+packages = ["mem0", "yiqiao"]
+only-include = ["mem0", "yiqiao"]
 
 [tool.yiqiao.release]
 # This compatibility wheel is embedded in YiQiao container images. It is not
@@ -182,11 +190,11 @@ test = [
 line-length = 120
 
 [tool.ruff.lint.isort]
-known-first-party = ["mem0"]
+known-first-party = ["mem0", "yiqiao"]
 
 [tool.isort]
 profile = "black"
-known_first_party = ["mem0"]
+known_first_party = ["mem0", "yiqiao"]
 # isort scope kept aligned with [tool.ruff.lint.isort] above.
 # black-equivalent profile here matches the formatter behaviour ruff applies.
 # Plugin-version bumps need a touch here to fire required CI checks (path-filter trap).

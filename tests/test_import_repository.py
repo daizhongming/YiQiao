@@ -4,6 +4,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from threading import Barrier
+from unittest.mock import MagicMock
 
 import pytest
 from sqlalchemy import create_engine, select, text
@@ -65,6 +66,17 @@ def _job_and_chunk(repo):
         fallback_reason="schema_validation",
     )
     return job, chunk
+
+
+def test_postgres_resource_lock_preserves_legacy_namespace_for_rolling_upgrades():
+    session = MagicMock()
+    session.get_bind.return_value.dialect.name = "postgresql"
+
+    ImportRepository._serialize_resource_transaction(session, "workspace-budget")
+
+    statement, params = session.execute.call_args.args
+    assert "pg_advisory" in str(statement)
+    assert params == {"resource": "mem0:workspace-budget"}
 
 
 def test_active_job_limit_is_atomic_across_repository_instances(tmp_path):

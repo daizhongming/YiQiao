@@ -4,6 +4,11 @@ import { useEffect, useMemo, useState } from "react";
 import { Check, Copy, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import {
+  buildAddMemoryCurl,
+  buildHealthCheckCurl,
+  buildSearchMemoriesCurl,
+} from "@/lib/yiqiao-api-examples";
 import { getActiveProjectId } from "@/utils/api";
 
 type SdkLanguage = "python" | "node" | "curl";
@@ -128,19 +133,27 @@ export default function InstallPage() {
       curl: [
         {
           label: "Step 1: Set credentials",
-          code: `API_URL="${apiUrl}"\nAPI_KEY="<your-api-key>"\nPROJECT_ID="${projectId}"`,
+          code: `YIQIAO_API_URL="${apiUrl}"\nYIQIAO_API_KEY="<your-api-key>"\nYIQIAO_PROJECT_ID="${projectId}"`,
         },
         {
-          label: "Step 2: Verify the API",
-          code: `curl --fail-with-body "$API_URL/v1/ping/" \\\n+  -H "X-API-Key: $API_KEY" \\\n+  -H "X-Project-ID: $PROJECT_ID"`,
+          label: "Step 2: Check YiQiao health",
+          code: buildHealthCheckCurl("$YIQIAO_API_URL"),
         },
         {
           label: "Step 3: Add a memory",
-          code: `curl --fail-with-body -X POST "$API_URL/memories" \\\n+  -H "X-API-Key: $API_KEY" \\\n+  -H "X-Project-ID: $PROJECT_ID" \\\n+  -H "Content-Type: application/json" \\\n+  -d '{"messages":[{"role":"user","content":"I prefer concise answers."}],"user_id":"alice"}'`,
+          code: buildAddMemoryCurl({
+            apiUrl: "$YIQIAO_API_URL",
+            apiKey: "$YIQIAO_API_KEY",
+            projectId: "$YIQIAO_PROJECT_ID",
+          }),
         },
         {
           label: "Step 4: Retrieve memories",
-          code: `curl --fail-with-body -X POST "$API_URL/search" \\\n+  -H "X-API-Key: $API_KEY" \\\n+  -H "X-Project-ID: $PROJECT_ID" \\\n+  -H "Content-Type: application/json" \\\n+  -d '{"query":"How should I answer Alice?","filters":{"user_id":"alice"}}'`,
+          code: buildSearchMemoriesCurl({
+            apiUrl: "$YIQIAO_API_URL",
+            apiKey: "$YIQIAO_API_KEY",
+            projectId: "$YIQIAO_PROJECT_ID",
+          }),
         },
       ],
     }),

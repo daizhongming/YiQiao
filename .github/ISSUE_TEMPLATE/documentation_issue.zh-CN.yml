@@ -1,0 +1,33 @@
+# This file was modified in 2026 by YiQiao contributors. See NOTICE.
+
+name: 文档问题
+description: 报告 YiQiao 文档中的错误、缺失或不清晰内容
+labels: ["documentation"]
+
+body:
+  - type: markdown
+    attributes:
+      value: "[Use the English form](https://github.com/daizhongming/YiQiao/issues/new?template=documentation_issue.yml)"
+
+  - type: input
+    id: page
+    attributes:
+      label: 页面或文件
+      description: 请提供需要修正的页面或仓库文件链接。
+      placeholder: https://github.com/daizhongming/YiQiao/blob/main/docs/yiqiao/...
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: 问题
+      description: 请说明哪些内容错误、不清晰或缺失。
+    validations:
+      required: true
+
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: 修改建议
+      description: 如有可能，请描述期望的文案或操作流程。

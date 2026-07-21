@@ -7,21 +7,23 @@ import tempfile
 import uuid
 from hashlib import sha256
 
-# Set up the directory path
+from mem0.utils.paths import resolve_yiqiao_dir
+
 VECTOR_ID = str(uuid.uuid4())
-home_dir = os.path.expanduser("~")
-mem0_dir = os.environ.get("MEM0_DIR") or os.path.join(home_dir, ".mem0")
-os.makedirs(mem0_dir, exist_ok=True)
+yiqiao_dir = resolve_yiqiao_dir()
+# Kept as an internal alias for extensions that imported the old module global.
+mem0_dir = yiqiao_dir
+os.makedirs(yiqiao_dir, exist_ok=True)
 
 _logger = logging.getLogger(__name__)
 
 
 def _config_path():
-    return os.path.join(mem0_dir, "config.json")
+    return os.path.join(yiqiao_dir, "config.json")
 
 
 def _load_config():
-    """Load ~/.mem0/config.json, returning {} on missing/malformed file."""
+    """Load the YiQiao config, returning {} when it is missing or malformed."""
     path = _config_path()
     if not os.path.exists(path):
         return {}
@@ -35,7 +37,7 @@ def _load_config():
 
 
 def _write_config(config):
-    """Best-effort write of ~/.mem0/config.json. Never raises."""
+    """Write the YiQiao config on a best-effort basis without raising."""
     path = _config_path()
     temp_path = None
     try:
@@ -56,7 +58,7 @@ def _write_config(config):
 
 
 def setup_config():
-    """Ensure ~/.mem0/config.json exists with a top-level user_id.
+    """Ensure the YiQiao config exists with a top-level user_id.
 
     Idempotent: backfills user_id for users whose config was written by the
     CLI (which writes telemetry.anonymous_id but no top-level user_id).
@@ -78,7 +80,7 @@ def get_user_id():
 
 
 def read_anon_ids():
-    """Return anon IDs and alias markers from ~/.mem0/config.json.
+    """Return anonymous IDs and alias markers from the YiQiao config.
 
     Returns a dict with keys "oss", "cli", "aliased_pairs" (IDs may be
     None). OSS Python writes top-level "user_id"; the CLI writes

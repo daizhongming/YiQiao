@@ -121,3 +121,16 @@ def test_chatgpt_mapping_cycle_does_not_flatten_other_nodes():
     )
 
     assert [message.content for message in conversations[0].messages] == ["parent", "tip"]
+
+
+def test_missing_api_key_error_only_advertises_yiqiao(monkeypatch, tmp_path, capsys):
+    monkeypatch.setattr(import_chat_history, "default_env_files", lambda: [])
+    monkeypatch.delenv("YIQIAO_API_KEY", raising=False)
+    monkeypatch.delenv("MEM0_API_KEY", raising=False)
+
+    result = import_chat_history.main(["--input", str(tmp_path / "missing.json")])
+    error = capsys.readouterr().err
+
+    assert result == 2
+    assert "YIQIAO_API_KEY" in error
+    assert "MEM0" not in error

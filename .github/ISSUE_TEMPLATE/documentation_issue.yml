@@ -5,6 +5,10 @@ description: Report incorrect or missing YiQiao documentation
 labels: ["documentation"]
 
 body:
+  - type: markdown
+    attributes:
+      value: "[使用简体中文表单](https://github.com/daizhongming/YiQiao/issues/new?template=documentation_issue.zh-CN.yml)"
+
   - type: input
     id: page
     attributes:

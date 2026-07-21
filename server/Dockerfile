@@ -8,6 +8,7 @@ ARG PIP_INDEX_URL=https://pypi.org/simple
 
 COPY pyproject.toml README.md LICENSE NOTICE THIRD_PARTY_NOTICES.md MODIFICATIONS.md ./
 COPY mem0 ./mem0
+COPY yiqiao ./yiqiao
 
 RUN python -m pip wheel --no-cache-dir --no-deps --wheel-dir /wheels .
 

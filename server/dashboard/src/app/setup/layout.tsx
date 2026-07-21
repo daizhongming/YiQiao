@@ -14,7 +14,7 @@ import {
 
 export const metadata = {
   title: "Setup | YiQiao",
-  description: "Set up your YiQiao instance",
+  description: "配置你的 YiQiao 实例 | Set up your YiQiao instance",
   icons: {
     icon: "/favicon.svg",
   },

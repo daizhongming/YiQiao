@@ -5,6 +5,10 @@ description: Report reproducible incorrect behavior in YiQiao
 labels: ["bug"]
 
 body:
+  - type: markdown
+    attributes:
+      value: "[使用简体中文表单](https://github.com/daizhongming/YiQiao/issues/new?template=bug_report.zh-CN.yml)"
+
   - type: dropdown
     id: component
     attributes:

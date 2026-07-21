@@ -1,5 +1,7 @@
 # Migrating to YiQiao
 
+[简体中文](MIGRATION.zh-CN.md) | **English**
+
 This guide covers migration from an earlier self-hosted development build or an
 upstream-derived Compose installation. It does not provide an automatic hosted
 service export. Use the dashboard chat-history importer or a supported export
@@ -42,9 +44,15 @@ databases require their current credentials.
 Set `PUBLIC_API_URL` and `PUBLIC_DASHBOARD_URL` when deploying behind a reverse
 proxy. Keep authentication enabled and telemetry disabled during migration.
 
-Legacy core environment prefixes remain accepted for compatibility and are
-listed in [Branding Exceptions](../../BRANDING_EXCEPTIONS.md). New deployment
-settings use YiQiao names.
+For the embedded Python memory core, a fresh home directory uses `~/.yiqiao`.
+When neither `YIQIAO_DIR` nor the legacy override is set, YiQiao continues using
+an existing `~/.mem0` only if `~/.yiqiao` does not yet exist. This compatibility
+fallback avoids hiding existing `history.db` and `config.json`; it does not copy
+or delete either directory. Set `YIQIAO_DIR` explicitly after validating any
+planned state move.
+
+Legacy core environment prefixes remain accepted for compatibility. New
+deployment settings use YiQiao names.
 
 ## Data Migration Options
 
@@ -244,9 +252,8 @@ cannot be reproduced exactly, restore the verified target snapshot into a new
 replacement deployment and reconcile explicitly. Never roll back by swapping an
 original legacy volume into the target.
 
-## Upstream Attribution
+## Legal Notices
 
-YiQiao is an independent derivative of the Apache-2.0 licensed Mem0 project. The
-retained Python import namespace is a compatibility detail, not a claim that this
-repository is an official upstream release. See [NOTICE](../../NOTICE) and
-[Branding Exceptions](../../BRANDING_EXCEPTIONS.md).
+For licensing, third-party attribution, and the record of modifications, see
+[NOTICE](../../NOTICE), [Third-Party Notices](../../THIRD_PARTY_NOTICES.md), and
+[Modification Notices](../../MODIFICATIONS.md).

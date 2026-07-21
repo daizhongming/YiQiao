@@ -15,7 +15,7 @@ from pathlib import Path
 from threading import Lock
 from typing import Any
 
-import mem0
+import yiqiao
 
 PROJECT_API_KEY = os.environ.get("YIQIAO_POSTHOG_API_KEY", "")
 HOST = os.environ.get("YIQIAO_POSTHOG_HOST", "https://us.i.posthog.com")
@@ -98,7 +98,7 @@ def _capture_once(event: str, state_key: str) -> None:
             client.capture(
                 distinct_id=_install_id(state),
                 event=event,
-                properties={"server_version": mem0.__version__},
+                properties={"server_version": yiqiao.__version__},
             )
             state[state_key] = datetime.now(timezone.utc).isoformat()
             _save_state(state)

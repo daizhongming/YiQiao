@@ -1,6 +1,8 @@
 # YiQiao
 > **Modification notice:** This file was modified in 2026 by YiQiao contributors. See NOTICE.
 
+[简体中文](README.zh-CN.md) | **English**
+
 YiQiao is a self-hosted memory service for AI assistants and agents. It combines
 an authenticated REST API, an operations dashboard, semantic and graph-backed
 memory, chat-history import, export, usage controls, and webhooks in one Docker
@@ -38,12 +40,12 @@ configures the model and embedding providers, issues the first project API key,
 and performs a memory write. The initialization script creates `server/.env`
 and strong local secrets without overwriting an existing file.
 
-| Service   | Default address                    | Override           |
-| --------- | ---------------------------------- | ------------------ |
-| Dashboard | <http://localhost:3000>            | `DASHBOARD_PORT`   |
-| REST API  | <http://localhost:8888>            | `API_PORT`         |
-| OpenAPI   | <http://localhost:8888/docs>       | follows `API_PORT` |
-| Health    | <http://localhost:8888/api/health> | follows `API_PORT` |
+| Service | Default address | Override |
+| --- | --- | --- |
+| Dashboard | <http://localhost:3000> | `DASHBOARD_PORT` |
+| REST API | <http://localhost:8888> | `API_PORT` |
+| OpenAPI | <http://localhost:8888/docs> | follows `API_PORT` |
+| Health | <http://localhost:8888/api/health> | follows `API_PORT` |
 
 Confirm that the stack is ready on Linux or macOS:
 
@@ -59,7 +61,7 @@ docker compose ps
 Invoke-RestMethod -Uri "http://localhost:8888/api/health"
 ```
 
-The default compose file pulls release images from GitHub Container Registry.
+The default Compose file pulls release images from GitHub Container Registry.
 To build the API and dashboard from the checked-out source instead, run from
 the repository root on Linux or macOS:
 
@@ -74,6 +76,8 @@ On Windows PowerShell:
 Set-Location server
 docker compose -f docker-compose.yaml -f docker-compose.build.yaml up -d --build
 ```
+
+<a id="verify-memory-add-and-search"></a>
 
 ## Verify Memory Add and Search
 
@@ -120,6 +124,26 @@ $searchBody = @{
 } | ConvertTo-Json -Depth 4
 Invoke-RestMethod -Method Post -Uri "$apiUrl/search" -Headers $headers -ContentType "application/json" -Body $searchBody
 ```
+
+## Python Entry Point
+
+Install the Python package from the checked-out source:
+
+```bash
+python -m pip install .
+```
+
+YiQiao provides synchronous and asynchronous Python entry points:
+
+```python
+from yiqiao import Memory, AsyncMemory
+```
+
+Local state is stored in `~/.yiqiao` by default and can be moved with
+`YIQIAO_DIR`.
+
+For a standalone service integration, use the REST API and project API keys
+shown above.
 
 ## What YiQiao Provides
 
@@ -176,14 +200,14 @@ to the internet; terminate TLS at a trusted reverse proxy and restrict access to
 the intended network.
 
 See [Operations](docs/yiqiao/OPERATIONS.md) for ports, persistence, backup,
-upgrade, source builds, and removal. Legacy compatibility names are catalogued
-in [Branding Exceptions](BRANDING_EXCEPTIONS.md).
+upgrade, source builds, and removal.
 
 ## Documentation
 
 - [Operations](docs/yiqiao/OPERATIONS.md)
 - [Migration](docs/yiqiao/MIGRATION.md)
 - [Troubleshooting](docs/yiqiao/TROUBLESHOOTING.md)
+- [Licensing and provenance](docs/yiqiao/LEGAL.md)
 - [Security policy](SECURITY.md)
 - [Contributing](CONTRIBUTING.md)
 - [Third-party notices](THIRD_PARTY_NOTICES.md)
@@ -197,8 +221,6 @@ in [Branding Exceptions](BRANDING_EXCEPTIONS.md).
   features. Plan a maintenance window for graph-volume snapshots.
 - Provider behavior, privacy, rate limits, and data residency remain the
   operator's responsibility.
-- The Python core retains a legacy import namespace for compatibility. It is not
-  a separate YiQiao public SDK commitment.
 - Version `0.1.x` is an initial open-source product line; deployment and API
   compatibility should be reviewed before each upgrade.
 
@@ -207,11 +229,10 @@ documented external database deployments, stronger backup automation, and a
 versioned compatibility policy. Roadmap items are directional and have no
 committed delivery date.
 
-## Upstream and License
+## License and Third-Party Notices
 
-YiQiao is an independent derivative of the open-source Mem0 project and is not
-an official Mem0 product. The upstream source is
-<https://github.com/mem0ai/mem0>. Upstream code and YiQiao modifications are
-provided under the Apache License 2.0; see [LICENSE](LICENSE), [NOTICE](NOTICE),
-[Modification Notices](MODIFICATIONS.md), and
-[Branding Exceptions](BRANDING_EXCEPTIONS.md).
+YiQiao is an independently maintained and released open-source product under
+the Apache License 2.0. See [LICENSE](LICENSE), [NOTICE](NOTICE),
+[Third-Party Notices](THIRD_PARTY_NOTICES.md), and
+[Modification Notices](MODIFICATIONS.md) for licensing, attribution, and the
+record of changes.

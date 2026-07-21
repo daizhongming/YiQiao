@@ -1,0 +1,50 @@
+# This file was modified in 2026 by YiQiao contributors. See NOTICE.
+
+name: 功能建议
+description: 为自托管 YiQiao 提出功能改进建议
+labels: ["enhancement"]
+
+body:
+  - type: markdown
+    attributes:
+      value: "[Use the English form](https://github.com/daizhongming/YiQiao/issues/new?template=feature_request.yml)"
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: 涉及组件
+      description: 该建议会影响哪个 YiQiao 组件？
+      options:
+        - REST API
+        - 管理仪表盘
+        - Docker Compose 部署
+        - Python 记忆核心
+        - 身份认证与访问控制
+        - 导入与导出
+        - 图记忆
+        - 文档
+        - 其他
+    validations:
+      required: true
+
+  - type: textarea
+    id: use_case
+    attributes:
+      label: 使用场景
+      description: 请描述运维人员或用户遇到的问题，并说明自托管约束。
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 期望行为
+      description: 请说明期望行为以及可能的兼容性影响。
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 已考虑的替代方案
+      description: 请列出现有临时方案或其他可选做法。

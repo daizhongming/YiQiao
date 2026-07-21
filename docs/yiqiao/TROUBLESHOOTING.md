@@ -1,5 +1,7 @@
 # YiQiao Troubleshooting
 
+**English** | [简体中文](TROUBLESHOOTING.zh-CN.md)
+
 Run diagnostics from `server/`. Keep logs and configuration private because they
 can contain prompts, identifiers, credentials, and provider details.
 

@@ -6,8 +6,10 @@ from pathlib import Path
 
 import pytest
 
+from mem0.configs import base as memory_config_base
 from mem0.configs.base import MemoryConfig
 from mem0.memory import setup as memory_setup
+from mem0.utils.paths import resolve_yiqiao_dir
 from scripts import full_stack_smoke
 
 TESTS_DIR = Path(__file__).resolve().parent
@@ -97,15 +99,45 @@ def _is_negated_name(expression: ast.expr, name: str) -> bool:
     )
 
 
-def test_mem0_state_is_scoped_to_the_pytest_temporary_root():
-    isolated_state = Path(os.environ["MEM0_DIR"]).resolve()
-    user_state = (Path.home() / ".mem0").resolve()
+def test_yiqiao_state_is_scoped_to_the_pytest_temporary_root():
+    isolated_state = Path(os.environ["YIQIAO_DIR"]).resolve()
+    user_state = (Path.home() / ".yiqiao").resolve()
 
     assert isolated_state != user_state
     assert isolated_state.parent.name.startswith("yiqiao-pytest-")
     assert Path(MemoryConfig().history_db_path).resolve().is_relative_to(isolated_state)
+    assert Path(memory_setup.yiqiao_dir).resolve() == isolated_state
     assert Path(memory_setup.mem0_dir).resolve() == isolated_state
+    assert Path(memory_config_base.mem0_dir).resolve() == isolated_state
     assert Path(memory_setup._config_path()).resolve().is_relative_to(isolated_state)
+
+
+def test_yiqiao_state_directory_uses_canonical_name_and_precedence(monkeypatch, tmp_path):
+    canonical = tmp_path / "canonical"
+    compatibility = tmp_path / "compatibility"
+
+    monkeypatch.delenv("YIQIAO_DIR", raising=False)
+    monkeypatch.delenv("MEM0_DIR", raising=False)
+    assert Path(resolve_yiqiao_dir(str(tmp_path))) == tmp_path / ".yiqiao"
+
+    monkeypatch.setenv("MEM0_DIR", str(compatibility))
+    assert Path(resolve_yiqiao_dir(str(tmp_path))) == compatibility
+
+    monkeypatch.setenv("YIQIAO_DIR", str(canonical))
+    assert Path(resolve_yiqiao_dir(str(tmp_path))) == canonical
+
+
+def test_yiqiao_state_directory_preserves_existing_implicit_legacy_state(monkeypatch, tmp_path):
+    monkeypatch.delenv("YIQIAO_DIR", raising=False)
+    monkeypatch.delenv("MEM0_DIR", raising=False)
+    legacy = tmp_path / ".mem0"
+    legacy.mkdir()
+
+    assert Path(resolve_yiqiao_dir(str(tmp_path))) == legacy
+
+    canonical = tmp_path / ".yiqiao"
+    canonical.mkdir()
+    assert Path(resolve_yiqiao_dir(str(tmp_path))) == canonical
 
 
 def test_tests_do_not_implicitly_load_dotenv_files():

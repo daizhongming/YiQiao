@@ -2,9 +2,9 @@
 
 blank_issues_enabled: false
 contact_links:
-  - name: YiQiao documentation
+  - name: YiQiao documentation / YiQiao 中文文档
     url: https://github.com/daizhongming/YiQiao/tree/main/docs/yiqiao
-    about: Read the deployment, operations, migration, and troubleshooting guides.
-  - name: Report a security vulnerability
+    about: Read deployment, operations, migration, and troubleshooting guides. / 阅读部署、运维、迁移和故障排查指南。
+  - name: Report a security vulnerability / 报告安全漏洞
     url: https://github.com/daizhongming/YiQiao/security/policy
-    about: Follow the private reporting process instead of opening a public issue.
+    about: Use private reporting instead of a public Issue. / 请使用私密报告流程，不要创建公开 Issue。

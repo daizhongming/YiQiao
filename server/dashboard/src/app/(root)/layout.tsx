@@ -10,7 +10,8 @@ import { DashboardClientLayout } from "./dashboard-client-layout";
 
 export const metadata: Metadata = {
   title: "Dashboard | YiQiao",
-  description: "YiQiao Dashboard",
+  description:
+    "YiQiao 自托管记忆管理仪表盘 | YiQiao self-hosted memory dashboard",
   icons: {
     icon: "/favicon.svg",
   },

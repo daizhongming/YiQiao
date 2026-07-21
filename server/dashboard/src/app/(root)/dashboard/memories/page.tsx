@@ -67,8 +67,9 @@ import { toast } from "@/components/ui/use-toast";
 import { cn } from "@/lib/utils";
 import { getErrorMessage } from "@/lib/error-message";
 import { useI18n, type Language } from "@/lib/i18n";
+import { buildAddMemoryCurl } from "@/lib/yiqiao-api-examples";
 import { Memory } from "@/types/api";
-import { api } from "@/utils/api";
+import { api, DEFAULT_PROJECT_ID, getActiveProjectId } from "@/utils/api";
 import { MEMORY_ENDPOINTS } from "@/utils/api-endpoints";
 import { MemoryImportDialog } from "./memory-import-dialog";
 
@@ -318,6 +319,11 @@ export default function MemoriesPage() {
   const resizingSource = useRef(false);
   const requestSequence = useRef(0);
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || "";
+  const [projectId, setProjectId] = useState(DEFAULT_PROJECT_ID);
+
+  useEffect(() => {
+    setProjectId(getActiveProjectId());
+  }, []);
 
   useEffect(() => {
     const media = window.matchMedia("(max-width: 767px)");
@@ -868,7 +874,11 @@ export default function MemoriesPage() {
               description="Create your first memory by sending a POST /memories request."
             >
               <pre className="mt-3 max-w-lg overflow-x-auto rounded bg-surface-default-secondary p-3 text-left font-mono text-xs">
-                {`curl -X POST ${apiUrl}/memories \\\n+  -H "X-API-Key: <your-key>" \\\n+  -H "Content-Type: application/json" \\\n+  -d '{"messages": [{"role": "user", "content": "I like hiking"}], "user_id": "alice"}'`}
+                {buildAddMemoryCurl({
+                  apiUrl,
+                  apiKey: "<your-api-key>",
+                  projectId,
+                })}
               </pre>
             </EmptyState>
           )}

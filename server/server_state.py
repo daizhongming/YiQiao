@@ -6,7 +6,7 @@ import threading
 from copy import deepcopy
 from typing import Any, Callable, Dict
 
-from mem0 import Memory
+from yiqiao import Memory
 
 _state_lock = threading.RLock()
 _current_config: Dict[str, Any] = {}

@@ -729,11 +729,13 @@ const translations: Record<string, string> = {
   "View Docs": "查看文档",
   "API Docs": "API 文档",
   "Step 1: Install": "第 1 步：安装",
+  "Step 1: Verify Node.js": "第 1 步：验证 Node.js",
   "Step 2: Initialize": "第 2 步：初始化",
   "Step 3: Add a memory": "第 3 步：添加记忆",
   "Step 4: Retrieve memories": "第 4 步：检索记忆",
   "Step 1: Set credentials": "第 1 步：设置凭据",
   "Step 2: Verify the API": "第 2 步：验证 API",
+  "Step 2: Check YiQiao health": "第 2 步：检查 YiQiao 运行状态",
   "Install and activate": "安装并启用",
   "Connect YiQiao": "连接 YiQiao",
   "Install Hermes Agent": "安装 Hermes Agent",
@@ -1451,7 +1453,7 @@ function getTranslation(text: string) {
   );
 }
 
-function translateText(text: string, language: Language) {
+export function translateText(text: string, language: Language) {
   if (language === "en") return text;
   return getTranslation(text) ?? text;
 }

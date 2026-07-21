@@ -561,7 +561,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 def main(argv: list[str]) -> int:
     args = parse_args(argv)
     if not args.api_key and not args.dry_run:
-        print("error: missing API key. Set YIQIAO_API_KEY/MEM0_API_KEY or pass --api-key.", file=sys.stderr)
+        print("error: missing API key. Set YIQIAO_API_KEY or pass --api-key.", file=sys.stderr)
         return 2
 
     files = list(iter_input_files(args.input, args.max_file_mb))

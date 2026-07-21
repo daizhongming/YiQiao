@@ -22,10 +22,10 @@ os.environ.update(
         "DATABASE_URL": f"sqlite:///{_DATABASE_PATH.as_posix()}",
         "HISTORY_DB_PATH": str(_TEST_ROOT / "history.db"),
         "JWT_SECRET": "yiqiao-test-only-jwt-secret-at-least-32-bytes",
-        "MEM0_DIR": str(_TEST_ROOT / "mem0-state"),
         "MEMORY_IMPORT_STORAGE_ROOT": str(_TEST_ROOT / "memory-imports"),
         "POSTGRES_PASSWORD": "yiqiao-test-only-postgres-password",
         "YIQIAO_TELEMETRY": "false",
+        "YIQIAO_DIR": str(_TEST_ROOT / "yiqiao-state"),
         "MEM0_TELEMETRY": "false",
     }
 )

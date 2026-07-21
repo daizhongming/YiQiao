@@ -15,7 +15,7 @@ import {
 
 export const metadata = {
   title: "YiQiao - Log in",
-  description: "Log in to YiQiao",
+  description: "登录 YiQiao | Sign in to YiQiao",
   icons: {
     icon: "/favicon.svg",
   },

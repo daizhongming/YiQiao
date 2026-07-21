@@ -12,17 +12,20 @@ SOURCE_COMPOSE := $(BASE_COMPOSE) -f docker-compose.build.yaml
 PRODUCTION_COMPOSE := $(BASE_COMPOSE) -f docker-compose.production.yaml
 RELEASE_COMPOSE := $(BASE_COMPOSE) -f docker-compose.production.yaml -f docker-compose.build.yaml
 E2E_COMPOSE := $(SOURCE_COMPOSE) -f docker-compose.e2e.yaml
-PYTHON_PATHS := mem0 server tests scripts
+PYTHON_PATHS := mem0 yiqiao server tests scripts
 PYTEST_ARGS ?=
 
 .PHONY: all check install install-python install-dashboard format format-check lint lint-python \
 	test test-python python-check dashboard dashboard-check dashboard-install dashboard-format \
 	dashboard-lint dashboard-typecheck dashboard-test dashboard-build init compose-config images smoke audit \
-	audit-modifications audit-python audit-dashboard secrets secrets-current secrets-history
+	audit-modifications audit-python audit-dashboard docs-check secrets secrets-current secrets-history
 
 all: check
 
-check: python-check dashboard-check compose-config
+check: docs-check python-check dashboard-check compose-config
+
+docs-check:
+	$(PYTHON) scripts/check_docs_localization.py
 
 install: install-python install-dashboard
 

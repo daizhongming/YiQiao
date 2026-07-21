@@ -1,35 +1,46 @@
 # Branding Exceptions
 
+[简体中文](BRANDING_EXCEPTIONS.zh-CN.md) | **English**
+
 YiQiao is the user-facing product name. This register documents inherited
 identifiers that remain temporarily because changing them would break Python
 imports, stored data, configuration, or integrations. An entry here is not
 permission to add new upstream branding.
 
-## 1. Python Import Namespace
+## 1. Python Compatibility Namespace
 
-The source directory and import namespace remain `mem0`:
+The canonical YiQiao Python entry point is:
 
 ```python
-from mem0 import Memory, AsyncMemory
+from yiqiao import Memory, AsyncMemory
 ```
 
-The API server and existing extensions import many modules below that namespace.
-Renaming it would break callers, serialized type paths, plugins, and internal
-imports in the current release. The installable distribution has been renamed
-to `yiqiao-memory`; only the Python import path is retained.
+The installable distribution is named `yiqiao-memory`. The inherited source
+directory and `mem0` import namespace remain as a compatibility layer because
+existing extensions import modules below that namespace. Removing it now would
+break callers, serialized type paths, plugins, and internal imports. New code
+and documentation must use `yiqiao`; the compatibility entry point is not a
+YiQiao public API commitment.
 
-Inherited class and variable identifiers derived from the namespace, such as
-`Mem0ValidationError`, `_mem0_extract_entities`, and `mem0_client`, may remain in
-internal code until a compatibility layer can be introduced. They must not be
-shown as the product name in UI copy, API descriptions, or new documentation.
+Inherited class and variable identifiers derived from the compatibility
+namespace, such as `Mem0ValidationError`, may remain in internal code. They must
+not be shown as the product name in UI copy, API descriptions, or new
+documentation.
 
 ## 2. Configuration and Local State
 
 The memory core and server still recognize legacy environment-variable prefixes
-and local state paths so existing installations can migrate without losing
-configuration. The retained surface includes:
+and explicitly selected local state paths so existing installations can migrate
+without losing configuration. New deployments and new usage store state in
+`~/.yiqiao` by default and must use `YIQIAO_DIR` for a directory override. The
+retained compatibility surface includes:
 
-- `MEM0_DIR`, `MEM0_API_KEY`, and the historical `~/.mem0` state directory.
+- `MEM0_DIR` and `MEM0_API_KEY` as explicit aliases. `MEM0_DIR` is consulted
+  only when `YIQIAO_DIR` is unset. If neither variable is set, `~/.yiqiao` is
+  the fresh-install default; when that directory does not yet exist but an
+  existing `~/.mem0` directory does, YiQiao keeps using the legacy directory so
+  an upgrade cannot silently hide history or identity state. Creating
+  `~/.yiqiao` or setting `YIQIAO_DIR` explicitly selects the canonical path.
 - `scripts/import_chat_history.py` accepts `MEM0_BASE_URL`, `MEM0_USER_ID`, and
   `MEM0_AGENT_ID` after the corresponding `YIQIAO_*` variables. These CLI
   fallbacks let existing unattended import jobs migrate without silently
@@ -40,7 +51,7 @@ configuration. The retained surface includes:
 - The `MEM0_LLM_*`, `MEM0_EMBEDDER_*`, `MEM0_EMBEDDING_*`,
   `MEM0_RERANK_*`, and `MEM0_DEFAULT_*` server configuration families.
 
-New deployment-level settings should use a `YIQIAO_` prefix. Legacy aliases may
+New deployment-level settings must use a `YIQIAO_` prefix. Legacy aliases may
 be removed only in a documented breaking release after the replacement has
 shipped for at least one release and the migration guide covers unattended CLI
 jobs as well as server configuration.

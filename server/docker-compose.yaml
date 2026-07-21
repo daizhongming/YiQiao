@@ -16,7 +16,6 @@ services:
       DASHBOARD_URL: ${PUBLIC_DASHBOARD_URL:-http://localhost:${DASHBOARD_PORT:-3000}}
       DASHBOARD_URLS: ${DASHBOARD_URLS:-${PUBLIC_DASHBOARD_URL:-http://localhost:${DASHBOARD_PORT:-3000}}}
       JWT_SECRET: ${JWT_SECRET:?Run scripts/init.sh or scripts/init.ps1 before starting YiQiao}
-      MEM0_TELEMETRY: ${MEM0_TELEMETRY:-false}
       PYTHONDONTWRITEBYTECODE: "1"
       PYTHONUNBUFFERED: "1"
       YIQIAO_POSTHOG_API_KEY: ${YIQIAO_POSTHOG_API_KEY:-}

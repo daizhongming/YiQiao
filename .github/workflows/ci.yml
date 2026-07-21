@@ -18,6 +18,27 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  documentation:
+    name: Documentation localization
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out source
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.12"
+
+      - name: Validate documentation coverage, links, anchors, and commands
+        run: make docs-check
+
+      - name: Test documentation validator
+        run: python -m unittest -v tests.test_docs_localization
+
   python-core:
     name: Python ${{ matrix.python-version }} core
     runs-on: ubuntu-24.04
@@ -46,7 +67,7 @@ jobs:
           python -m pip check
 
       - name: Compile Python sources
-        run: python -m compileall -q mem0
+        run: python -m compileall -q mem0 yiqiao
 
       - name: Run core tests
         run: python -m pytest -q tests/configs tests/memory tests/utils

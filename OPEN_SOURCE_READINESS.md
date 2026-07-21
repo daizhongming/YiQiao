@@ -1,5 +1,7 @@
 # YiQiao Open-Source Readiness
 
+[简体中文](OPEN_SOURCE_READINESS.zh-CN.md) | **English**
+
 Last updated: 2026-07-20
 
 This document defines the release gates for YiQiao and records the design of
@@ -99,13 +101,24 @@ test. It creates a unique Compose project and must not reuse production data.
 2. Push the snapshot to `main` with an ordinary fast-forward update. Never use
    force-push for release publication.
 3. Require all four workflows to succeed on the exact `main` commit.
-4. Dispatch `YiQiao Images` from `main` with `publish=true`; verify both GHCR
-   packages are public and anonymously resolve `latest` and commit-SHA tags.
-5. Run the literal README clone, initializer, default Compose startup, health,
+4. Enforce the required checks on protected `main`, prohibit force-pushes and
+   deletion, then create `v0.1.0` at that exact commit. Verify the tag resolves
+   to the reviewed `main` SHA.
+5. Dispatch `YiQiao Images` from `main` with `publish=true` and
+   `version=v0.1.0`. The workflow must reject a version tag that is missing or
+   targets another commit.
+6. Verify both GHCR packages are public and anonymously resolve `latest`,
+   `v0.1.0`, and full commit-SHA tags. Record the immutable multi-platform
+   digest for each image.
+7. Create the bilingual GitHub Release for `v0.1.0`, including the exact source
+   SHA, image tags and digests, security and upgrade guidance, Mem0 attribution,
+   and Apache-2.0 licensing.
+8. Run the literal README clone, initializer, default Compose startup, health,
    setup, memory add, and search path from a clean checkout.
-6. Remove obsolete public review refs so upstream history is not reachable
+9. Remove obsolete public review refs so upstream history is not reachable
    through a YiQiao branch, then repeat the all-ref secret and path audit.
-7. Record immutable image digests before announcing or upgrading a deployment.
+10. Reconcile the tag, GitHub Release, protected branch, workflow SHA, and all
+    three image tags before announcing or upgrading a deployment.
 
 ## Residual Risks
 

@@ -1,6 +1,8 @@
 # YiQiao Server
 > **Modification notice:** This file was modified in 2026 by YiQiao contributors. See NOTICE.
 
+[简体中文](README.zh-CN.md) | **English**
+
 This directory contains the YiQiao API, dashboard, database migrations, and
 Docker Compose deployment. The canonical product Quick Start is in the
 [repository README](../README.md).
@@ -32,12 +34,12 @@ docker compose up -d
 Open <http://localhost:3000> and complete the first-run setup. The default
 service addresses are:
 
-| Service   | Address                            | Override           |
-| --------- | ---------------------------------- | ------------------ |
-| Dashboard | <http://localhost:3000>            | `DASHBOARD_PORT`   |
-| API       | <http://localhost:8888>            | `API_PORT`         |
-| OpenAPI   | <http://localhost:8888/docs>       | follows `API_PORT` |
-| Health    | <http://localhost:8888/api/health> | follows `API_PORT` |
+| Service | Address | Override |
+| --- | --- | --- |
+| Dashboard | <http://localhost:3000> | `DASHBOARD_PORT` |
+| API | <http://localhost:8888> | `API_PORT` |
+| OpenAPI | <http://localhost:8888/docs> | follows `API_PORT` |
+| Health | <http://localhost:8888/api/health> | follows `API_PORT` |
 
 The default deployment pulls the configured release images. To build the API
 and dashboard from this checkout, run the following from the repository root in

@@ -10,9 +10,9 @@ except Exception:  # pragma: no cover - dependency may be absent until image reb
     GraphDatabase = None
 
 try:
-    from mem0.utils.entity_extraction import extract_entities as _mem0_extract_entities
-except Exception:  # pragma: no cover - optional in older mem0 builds
-    _mem0_extract_entities = None
+    from mem0.utils.entity_extraction import extract_entities as _core_extract_entities
+except Exception:  # pragma: no cover - optional in older core builds
+    _core_extract_entities = None
 
 _driver = None
 _schema_ready = False
@@ -170,9 +170,9 @@ def _coerce_entities(raw_entities: Any) -> list[tuple[str, str]]:
 
 def extract_graph_entities(text: str | None) -> list[dict[str, str]]:
     entities: list[tuple[str, str]] = []
-    if text and _mem0_extract_entities is not None:
+    if text and _core_extract_entities is not None:
         try:
-            entities = _coerce_entities(_mem0_extract_entities(text))
+            entities = _coerce_entities(_core_extract_entities(text))
         except Exception:
             logging.debug("memory entity extraction failed", exc_info=True)
     fallback_entities = _fallback_entities(text)

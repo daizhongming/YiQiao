@@ -14,7 +14,7 @@ from server.neo4j_graph import (
 
 
 def test_fallback_entity_extraction_captures_proper_identifiers_and_quotes(monkeypatch):
-    monkeypatch.setattr(neo4j_graph, "_mem0_extract_entities", None)
+    monkeypatch.setattr(neo4j_graph, "_core_extract_entities", None)
     entities = extract_graph_entities('Alice uses Neo4j for "Graph Memory" in yiqiao_cloud.')
     names = {entity["name"] for entity in entities}
 
@@ -25,7 +25,7 @@ def test_fallback_entity_extraction_captures_proper_identifiers_and_quotes(monke
 
 
 def test_primary_entity_extraction_only_merges_identifier_fallbacks(monkeypatch):
-    monkeypatch.setattr(neo4j_graph, "_mem0_extract_entities", lambda _text: [("PERSON", "Alice")])
+    monkeypatch.setattr(neo4j_graph, "_core_extract_entities", lambda _text: [("PERSON", "Alice")])
 
     entities = extract_graph_entities("Tell me about Alice in yiqiao_cloud.")
     names = {entity["name"] for entity in entities}
