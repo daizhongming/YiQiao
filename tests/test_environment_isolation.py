@@ -49,7 +49,7 @@ def _initializer_fixture(tmp_path: Path, script_name: str) -> tuple[Path, Path]:
     shutil.copyfile(PROJECT_ROOT / "scripts" / script_name, script)
     script.chmod(0o755)
     (server_dir / ".env.example").write_text(
-        "POSTGRES_PASSWORD=\nNEO4J_PASSWORD=\nJWT_SECRET=\n",
+        "POSTGRES_PASSWORD=\nNEO4J_PASSWORD=\nJWT_SECRET=\nOAUTH_USER_CODE_HMAC_SECRET=\nOAUTH_AUDIT_HMAC_SECRET=\n",
         encoding="utf-8",
     )
     return root, script
@@ -334,6 +334,8 @@ def test_smoke_prepare_uses_initializer_and_generated_secrets(monkeypatch, tmp_p
         "POSTGRES_PASSWORD": "generated-postgres",
         "NEO4J_PASSWORD": "generated-neo4j",
         "JWT_SECRET": "generated-jwt",
+        "OAUTH_USER_CODE_HMAC_SECRET": "generated-oauth-user-code",
+        "OAUTH_AUDIT_HMAC_SECRET": "generated-oauth-audit",
     }
     contents = "".join(f"{key}={value}\n" for key, value in generated.items())
     if preexisting:
@@ -379,6 +381,58 @@ def test_smoke_health_requires_ok_status(monkeypatch, response):
         full_stack_smoke._wait_for_health("dashboard", "http://dashboard/api/health", 1)
 
 
+def test_smoke_validates_generic_connector_discovery(monkeypatch):
+    issuer = "https://memory.example"
+    responses = {
+        f"{issuer}/.well-known/oauth-authorization-server": {
+            "issuer": issuer,
+            "device_authorization_endpoint": f"{issuer}/oauth/device_authorization",
+            "token_endpoint": f"{issuer}/oauth/token",
+            "revocation_endpoint": f"{issuer}/oauth/revoke",
+            "grant_types_supported": [
+                "urn:ietf:params:oauth:grant-type:device_code",
+                "refresh_token",
+            ],
+            "token_endpoint_auth_methods_supported": ["none"],
+            "revocation_endpoint_auth_methods_supported": ["none"],
+            "code_challenge_methods_supported": ["S256"],
+            "scopes_supported": ["memory:read", "memory:write"],
+            "protocol_version": "1.0",
+        },
+        f"{issuer}/.well-known/service-capabilities": {
+            "protocol_version": "1.0",
+            "service_id": "yiqiao",
+            "issuer": issuer,
+            "oauth_metadata": f"{issuer}/.well-known/oauth-authorization-server",
+            "audiences": ["yiqiao:memory-api"],
+            "health_endpoint": f"{issuer}/oauth/health",
+            "project_selection": {"required": True, "performed_during_authorization": True},
+            "memory_api": {
+                "search_endpoint": f"{issuer}/search",
+                "write_endpoint": f"{issuer}/memories",
+                "ping_endpoint": f"{issuer}/v1/ping/",
+                "scopes": {"read": "memory:read", "write": "memory:write"},
+            },
+        },
+        f"{issuer}/oauth/health": {
+            "status": "ok",
+            "service_id": "yiqiao",
+            "protocol_version": "1.0",
+        },
+    }
+    requested = []
+
+    def fake_request(method, url, **_kwargs):
+        requested.append((method, url))
+        return responses[url]
+
+    monkeypatch.setattr(full_stack_smoke, "_request_json", fake_request)
+
+    full_stack_smoke._assert_connector_discovery(issuer)
+
+    assert requested == [("GET", url) for url in responses]
+
+
 def test_smoke_checks_both_services_before_and_after_restart():
     source = Path(full_stack_smoke.__file__).read_text(encoding="utf-8")
     tree = ast.parse(source, filename=full_stack_smoke.__file__)
@@ -393,3 +447,33 @@ def test_smoke_checks_both_services_before_and_after_restart():
     ]
 
     assert service_names == ["API", "dashboard", "API", "dashboard"]
+
+
+def test_smoke_requires_current_migration_head():
+    assert full_stack_smoke.EXPECTED_MIGRATION == "018"
+
+
+def test_smoke_rejects_a_stale_migration_head():
+    class StackStub:
+        @staticmethod
+        def run(*_args, **_kwargs):
+            return subprocess.CompletedProcess([], 0, "017\n", "")
+
+    with pytest.raises(full_stack_smoke.SmokeError, match="Expected Alembic migration 018, found 017"):
+        full_stack_smoke._assert_migration(StackStub())
+
+
+def test_smoke_has_no_client_specific_pairing_route():
+    source = Path(full_stack_smoke.__file__).read_text(encoding="utf-8").casefold()
+
+    assert "/integrations/" not in source
+    assert "pairing/start" not in source
+
+
+def test_ci_runs_oauth_concurrency_only_against_ephemeral_postgres():
+    workflow = (PROJECT_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+
+    assert "POSTGRES_DB: yiqiao_oauth_test" in workflow
+    assert "OAUTH_TEST_DATABASE_DSN:" in workflow
+    assert "@127.0.0.1:5432/yiqiao_oauth_test" in workflow
+    assert "python -m pytest -q tests/test_public_service_oauth_postgres.py" in workflow

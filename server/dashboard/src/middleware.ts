@@ -12,10 +12,29 @@ const PUBLIC_PATHS = [
   "/favicon",
 ];
 
+// Connector clients bootstrap and exchange credentials without a Dashboard
+// session. Keep management endpoints under `/oauth/*` authenticated by using
+// an exact allowlist for the public protocol surface.
+const PUBLIC_CONNECTOR_PATHS = new Set([
+  "/.well-known/oauth-authorization-server",
+  "/.well-known/service-capabilities",
+  "/oauth/device_authorization",
+  "/oauth/health",
+  "/oauth/revoke",
+  "/oauth/token",
+  "/memories",
+  "/search",
+  "/v1/ping",
+  "/v1/ping/",
+]);
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  if (PUBLIC_PATHS.some((p) => pathname.startsWith(p))) {
+  if (
+    PUBLIC_PATHS.some((p) => pathname.startsWith(p)) ||
+    PUBLIC_CONNECTOR_PATHS.has(pathname)
+  ) {
     return NextResponse.next();
   }
 

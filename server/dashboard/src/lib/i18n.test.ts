@@ -13,4 +13,11 @@ describe("YiQiao integration translations", () => {
       "第 2 步：检查 YiQiao 运行状态",
     );
   });
+
+  it("translates Connected Apps authorization and management labels", () => {
+    expect(translateText("Connected Apps", "en")).toBe("Connected Apps");
+    expect(translateText("Connected Apps", "zh")).toBe("已连接应用");
+    expect(translateText("Approve selected scopes", "zh")).toBe("批准所选权限");
+    expect(translateText("Registered applications", "zh")).toBe("已注册应用");
+  });
 });

@@ -231,9 +231,12 @@ def test_project_resource_purge_cleans_regular_and_playground_history(monkeypatc
     monkeypatch.setattr(settings_router, "delete_graph_memories", MagicMock())
     monkeypatch.setattr(settings_router, "get_json", lambda *_args: [])
     monkeypatch.setattr(settings_router, "set_json", MagicMock())
+    revoke_project_grants = MagicMock()
+    monkeypatch.setattr(settings_router, "revoke_project_grants", revoke_project_grants)
 
     settings_router._purge_project_resources(db, "project-a")
 
+    revoke_project_grants.assert_called_once_with(db, "project-a")
     memory.vector_store.list.assert_has_calls(
         [
             call(filters={"project_id": "project-a"}, top_k=1_000_000),

@@ -93,6 +93,8 @@ GENERATED_KEYS=""
 ensure_secret POSTGRES_PASSWORD
 ensure_secret NEO4J_PASSWORD
 ensure_secret JWT_SECRET
+ensure_secret OAUTH_USER_CODE_HMAC_SECRET
+ensure_secret OAUTH_AUDIT_HMAC_SECRET
 
 neo4j_password=$(printf '%s' "$(env_value NEO4J_PASSWORD)" | tr -d '[:space:]')
 case "$neo4j_password" in

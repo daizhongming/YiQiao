@@ -95,7 +95,13 @@ if (-not (Test-Path -LiteralPath $EnvFile -PathType Leaf)) {
 }
 
 $generatedKeys = New-Object "System.Collections.Generic.List[string]"
-foreach ($key in @("POSTGRES_PASSWORD", "NEO4J_PASSWORD", "JWT_SECRET")) {
+foreach ($key in @(
+    "POSTGRES_PASSWORD",
+    "NEO4J_PASSWORD",
+    "JWT_SECRET",
+    "OAUTH_USER_CODE_HMAC_SECRET",
+    "OAUTH_AUDIT_HMAC_SECRET"
+)) {
     if (Set-MissingSecret $key) {
         $generatedKeys.Add($key)
     }

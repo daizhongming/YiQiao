@@ -16,6 +16,9 @@ services:
       DASHBOARD_URL: ${PUBLIC_DASHBOARD_URL:-http://localhost:${DASHBOARD_PORT:-3000}}
       DASHBOARD_URLS: ${DASHBOARD_URLS:-${PUBLIC_DASHBOARD_URL:-http://localhost:${DASHBOARD_PORT:-3000}}}
       JWT_SECRET: ${JWT_SECRET:?Run scripts/init.sh or scripts/init.ps1 before starting YiQiao}
+      OAUTH_AUDIT_HMAC_SECRET: ${OAUTH_AUDIT_HMAC_SECRET:?Run scripts/init.sh or scripts/init.ps1 before starting YiQiao}
+      OAUTH_ISSUER: ${OAUTH_ISSUER:-${PUBLIC_DASHBOARD_URL:-http://localhost:${DASHBOARD_PORT:-3000}}}
+      OAUTH_USER_CODE_HMAC_SECRET: ${OAUTH_USER_CODE_HMAC_SECRET:?Run scripts/init.sh or scripts/init.ps1 before starting YiQiao}
       PYTHONDONTWRITEBYTECODE: "1"
       PYTHONUNBUFFERED: "1"
       YIQIAO_POSTHOG_API_KEY: ${YIQIAO_POSTHOG_API_KEY:-}

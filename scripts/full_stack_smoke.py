@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import argparse
+import base64
+import hashlib
 import json
 import os
 import secrets
@@ -11,6 +13,7 @@ import subprocess
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 from typing import Any
@@ -21,7 +24,13 @@ BASE_COMPOSE = SERVER / "docker-compose.yaml"
 BUILD_COMPOSE = SERVER / "docker-compose.build.yaml"
 E2E_COMPOSE = SERVER / "docker-compose.e2e.yaml"
 ENV_FILE = SERVER / ".env"
-REQUIRED_SECRETS = ("POSTGRES_PASSWORD", "NEO4J_PASSWORD", "JWT_SECRET")
+REQUIRED_SECRETS = (
+    "POSTGRES_PASSWORD",
+    "NEO4J_PASSWORD",
+    "JWT_SECRET",
+    "OAUTH_USER_CODE_HMAC_SECRET",
+    "OAUTH_AUDIT_HMAC_SECRET",
+)
 PROVIDER_CREDENTIAL_ENV_NAMES = (
     "OPENAI_API_KEY",
     "ANTHROPIC_API_KEY",
@@ -55,6 +64,7 @@ RUNTIME_ENV_NAMES = (
     "NEO4J_DATABASE",
     "NEO4J_URI",
     "NEO4J_USERNAME",
+    "OAUTH_ISSUER",
     "POSTGRES_COLLECTION_NAME",
     "POSTGRES_DB",
     "POSTGRES_HOST",
@@ -68,7 +78,7 @@ E2E_PROVIDER_BASE_URL = "http://model-stub:8080/v1"
 E2E_LLM_MODEL = "yiqiao-e2e"
 E2E_EMBEDDER_MODEL = "yiqiao-e2e-embedding"
 E2E_EMBEDDING_DIMS = 16
-EXPECTED_MIGRATION = "017"
+EXPECTED_MIGRATION = "018"
 PROVIDER_SETUP_DETAIL = (
     "Model provider credentials are not configured. Complete provider setup before using memory operations."
 )
@@ -83,13 +93,23 @@ def _request_json(
     url: str,
     *,
     payload: dict[str, Any] | None = None,
+    form: dict[str, str] | None = None,
     headers: dict[str, str] | None = None,
     timeout: float = 15,
 ) -> Any:
-    body = None if payload is None else json.dumps(payload).encode("utf-8")
+    if payload is not None and form is not None:
+        raise ValueError("payload and form are mutually exclusive")
+    body = None
+    content_type = None
+    if payload is not None:
+        body = json.dumps(payload).encode("utf-8")
+        content_type = "application/json"
+    elif form is not None:
+        body = urllib.parse.urlencode(form).encode("ascii")
+        content_type = "application/x-www-form-urlencoded"
     request_headers = {"Accept": "application/json", **(headers or {})}
-    if body is not None:
-        request_headers["Content-Type"] = "application/json"
+    if content_type is not None:
+        request_headers["Content-Type"] = content_type
     request = urllib.request.Request(url, data=body, headers=request_headers, method=method)
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
@@ -103,6 +123,28 @@ def _request_json(
         return json.loads(raw)
     except json.JSONDecodeError as exc:
         raise SmokeError(f"{method} {url} returned invalid JSON") from exc
+
+
+def _request_status(
+    method: str,
+    url: str,
+    *,
+    form: dict[str, str] | None = None,
+    headers: dict[str, str] | None = None,
+    timeout: float = 15,
+) -> tuple[int, str]:
+    body = None if form is None else urllib.parse.urlencode(form).encode("ascii")
+    request_headers = {"Accept": "application/json", **(headers or {})}
+    if body is not None:
+        request_headers["Content-Type"] = "application/x-www-form-urlencoded"
+    request = urllib.request.Request(url, data=body, headers=request_headers, method=method)
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            return response.status, response.read().decode("utf-8", errors="replace")
+    except urllib.error.HTTPError as exc:
+        return exc.code, exc.read().decode("utf-8", errors="replace")
+    except (OSError, urllib.error.URLError) as exc:
+        raise SmokeError(f"{method} {url} failed: {exc}") from exc
 
 
 def _wait_for_json(url: str, timeout: float) -> Any:
@@ -122,6 +164,51 @@ def _wait_for_health(service: str, url: str, timeout: float) -> dict[str, Any]:
     if not isinstance(response, dict) or response.get("status") != "ok":
         raise SmokeError(f"Unexpected {service} health response: {response!r}")
     return response
+
+
+def _assert_connector_discovery(issuer: str) -> None:
+    metadata = _request_json("GET", f"{issuer}/.well-known/oauth-authorization-server")
+    capabilities = _request_json("GET", f"{issuer}/.well-known/service-capabilities")
+    health = _request_json("GET", f"{issuer}/oauth/health")
+    expected_metadata = {
+        "issuer": issuer,
+        "device_authorization_endpoint": f"{issuer}/oauth/device_authorization",
+        "token_endpoint": f"{issuer}/oauth/token",
+        "revocation_endpoint": f"{issuer}/oauth/revoke",
+        "grant_types_supported": [
+            "urn:ietf:params:oauth:grant-type:device_code",
+            "refresh_token",
+        ],
+        "token_endpoint_auth_methods_supported": ["none"],
+        "revocation_endpoint_auth_methods_supported": ["none"],
+        "code_challenge_methods_supported": ["S256"],
+        "scopes_supported": ["memory:read", "memory:write"],
+        "protocol_version": "1.0",
+    }
+    if metadata != expected_metadata:
+        raise SmokeError(f"Unexpected OAuth metadata: {metadata!r}")
+    expected_capabilities = {
+        "protocol_version": "1.0",
+        "service_id": "yiqiao",
+        "issuer": issuer,
+        "oauth_metadata": f"{issuer}/.well-known/oauth-authorization-server",
+        "audiences": ["yiqiao:memory-api"],
+        "health_endpoint": f"{issuer}/oauth/health",
+        "project_selection": {"required": True, "performed_during_authorization": True},
+        "memory_api": {
+            "search_endpoint": f"{issuer}/search",
+            "write_endpoint": f"{issuer}/memories",
+            "ping_endpoint": f"{issuer}/v1/ping/",
+            "scopes": {"read": "memory:read", "write": "memory:write"},
+        },
+    }
+    if capabilities != expected_capabilities:
+        raise SmokeError(f"Unexpected service capabilities: {capabilities!r}")
+    if health != {"status": "ok", "service_id": "yiqiao", "protocol_version": "1.0"}:
+        raise SmokeError(f"Unexpected connector health response: {health!r}")
+    public_contract = json.dumps([metadata, capabilities], sort_keys=True).casefold()
+    if "bosshelper" in public_contract or "boss-helper" in public_contract:
+        raise SmokeError("Public connector discovery contains a client-specific field or value")
 
 
 def _initializer_command(platform: str | None = None) -> list[str]:
@@ -254,6 +341,7 @@ class Stack:
                 "API_PORT": str(args.api_port),
                 "DASHBOARD_BIND_ADDRESS": "127.0.0.1",
                 "DASHBOARD_PORT": str(args.dashboard_port),
+                "OAUTH_ISSUER": f"http://127.0.0.1:{args.dashboard_port}",
                 "YIQIAO_API_IMAGE": f"{self.project}-api:smoke",
                 "YIQIAO_DASHBOARD_IMAGE": f"{self.project}-dashboard:smoke",
                 "YIQIAO_PULL_POLICY": "build",
@@ -350,7 +438,7 @@ def _assert_migration(stack: Stack) -> str:
     return revision
 
 
-def _exercise_api(api_url: str, marker: str) -> tuple[str, str]:
+def _exercise_api(api_url: str, marker: str) -> tuple[str, str, str]:
     tokens = _request_json(
         "POST",
         f"{api_url}/auth/register",
@@ -402,7 +490,141 @@ def _exercise_api(api_url: str, marker: str) -> tuple[str, str]:
     )
     if marker not in _memory_texts(searched):
         raise SmokeError(f"Memory search did not return the added marker: {searched!r}")
-    return api_key, marker
+    return access_token, api_key, marker
+
+
+def _exercise_connector(
+    api_url: str,
+    issuer: str,
+    admin_access_token: str,
+) -> tuple[str, str, str, str]:
+    client_id = f"release-smoke-{secrets.token_hex(6)}"
+    dashboard_headers = {
+        "Authorization": f"Bearer {admin_access_token}",
+        "X-Project-ID": "default-project",
+    }
+    application = _request_json(
+        "POST",
+        f"{api_url}/oauth/applications",
+        payload={
+            "client_id": client_id,
+            "display_name": "Release Smoke Connector",
+            "client_type": "public",
+            "allowed_audiences": ["yiqiao:memory-api"],
+            "allowed_scopes": ["memory:read", "memory:write"],
+            "operator_metadata": {"purpose": "isolated-release-smoke"},
+        },
+        headers=dashboard_headers,
+    )
+    if application.get("client_id") != client_id or application.get("status") != "active":
+        raise SmokeError(f"Public client registration was not accepted: {application!r}")
+
+    code_verifier = secrets.token_urlsafe(48)
+    code_challenge = base64.urlsafe_b64encode(hashlib.sha256(code_verifier.encode("ascii")).digest())
+    code_challenge = code_challenge.rstrip(b"=").decode("ascii")
+    device = _request_json(
+        "POST",
+        f"{issuer}/oauth/device_authorization",
+        form={
+            "client_id": client_id,
+            "scope": "memory:read memory:write",
+            "audience": "yiqiao:memory-api",
+            "code_challenge": code_challenge,
+            "code_challenge_method": "S256",
+        },
+    )
+    device_code = str(device.get("device_code") or "")
+    user_code = str(device.get("user_code") or "")
+    if not device_code.startswith("yqod_") or not user_code:
+        raise SmokeError(f"Device authorization did not return opaque codes: {device!r}")
+    if device.get("verification_uri") != f"{issuer}/dashboard/connected-apps":
+        raise SmokeError(f"Device authorization returned an unexpected verification URI: {device!r}")
+
+    request = _request_json(
+        "POST",
+        f"{api_url}/oauth/device-requests/lookup",
+        payload={"user_code": user_code},
+        headers=dashboard_headers,
+    )
+    request_id = str(request.get("id") or "")
+    if not request_id or request.get("client_id") != client_id or request.get("status") != "pending":
+        raise SmokeError(f"Dashboard device-code lookup returned an unexpected response: {request!r}")
+    approved = _request_json(
+        "POST",
+        f"{api_url}/oauth/device-requests/{request_id}/approve",
+        payload={
+            "project_id": "default-project",
+            "approved_scopes": ["memory:read", "memory:write"],
+        },
+        headers=dashboard_headers,
+    )
+    if approved.get("status") != "approved" or approved.get("project_id") != "default-project":
+        raise SmokeError(f"Device authorization approval failed: {approved!r}")
+
+    token = _request_json(
+        "POST",
+        f"{issuer}/oauth/token",
+        form={
+            "grant_type": "urn:ietf:params:oauth:grant-type:device_code",
+            "device_code": device_code,
+            "client_id": client_id,
+            "code_verifier": code_verifier,
+        },
+    )
+    access_token = str(token.get("access_token") or "")
+    refresh_token = str(token.get("refresh_token") or "")
+    if (
+        not access_token.startswith("yqoa_")
+        or not refresh_token.startswith("yqor_")
+        or token.get("audience") != "yiqiao:memory-api"
+        or token.get("scope") != "memory:read memory:write"
+        or token.get("project") != "default-project"
+    ):
+        raise SmokeError(f"Device-code exchange returned an unexpected token response: {token!r}")
+
+    connector_marker = f"YiQiao connector marker {secrets.token_hex(8)} persists across restarts."
+    bearer_headers = {"Authorization": f"Bearer {access_token}"}
+    added = _request_json(
+        "POST",
+        f"{issuer}/memories",
+        payload={
+            "messages": [{"role": "user", "content": connector_marker}],
+            "user_id": "release-connector-user",
+            "infer": False,
+        },
+        headers=bearer_headers,
+        timeout=120,
+    )
+    if connector_marker not in _memory_texts(added):
+        raise SmokeError(f"OAuth memory add response did not contain the marker: {added!r}")
+    searched = _request_json(
+        "POST",
+        f"{issuer}/search",
+        payload={
+            "query": "connector persistence marker",
+            "filters": {"user_id": "release-connector-user"},
+        },
+        headers=bearer_headers,
+        timeout=120,
+    )
+    if connector_marker not in _memory_texts(searched):
+        raise SmokeError(f"OAuth memory search did not return the added marker: {searched!r}")
+    ping = _request_json("GET", f"{issuer}/v1/ping/", headers=bearer_headers)
+    if not isinstance(ping, dict):
+        raise SmokeError(f"OAuth ping returned an unexpected response: {ping!r}")
+
+    unknown_status, unknown_body = _request_status(
+        "POST",
+        f"{issuer}/oauth/revoke",
+        form={
+            "token": f"yqor_{secrets.token_urlsafe(32)}",
+            "token_type_hint": "refresh_token",
+            "client_id": client_id,
+        },
+    )
+    if unknown_status != 200 or unknown_body:
+        raise SmokeError(f"Unknown-token revocation was not RFC 7009 compliant: {unknown_status} {unknown_body!r}")
+    return client_id, access_token, refresh_token, connector_marker
 
 
 def _assert_persisted(api_url: str, api_key: str, marker: str) -> None:
@@ -415,6 +637,86 @@ def _assert_persisted(api_url: str, api_key: str, marker: str) -> None:
     )
     if marker not in _memory_texts(searched):
         raise SmokeError("Memory was not available after the full Compose restart")
+
+
+def _assert_connector_persisted_and_revoke(
+    api_url: str,
+    issuer: str,
+    admin_access_token: str,
+    client_id: str,
+    access_token: str,
+    refresh_token: str,
+    marker: str,
+) -> None:
+    bearer_headers = {"Authorization": f"Bearer {access_token}"}
+    searched = _request_json(
+        "POST",
+        f"{issuer}/search",
+        payload={
+            "query": "connector persistence marker",
+            "filters": {"user_id": "release-connector-user"},
+        },
+        headers=bearer_headers,
+        timeout=120,
+    )
+    if marker not in _memory_texts(searched):
+        raise SmokeError("OAuth memory was not available after the full Compose restart")
+
+    rotated = _request_json(
+        "POST",
+        f"{issuer}/oauth/token",
+        form={
+            "grant_type": "refresh_token",
+            "refresh_token": refresh_token,
+            "client_id": client_id,
+        },
+    )
+    next_access_token = str(rotated.get("access_token") or "")
+    next_refresh_token = str(rotated.get("refresh_token") or "")
+    if (
+        not next_access_token.startswith("yqoa_")
+        or not next_refresh_token.startswith("yqor_")
+        or next_access_token == access_token
+        or next_refresh_token == refresh_token
+    ):
+        raise SmokeError(f"Refresh-token rotation returned an unexpected response: {rotated!r}")
+
+    stale_status, stale_body = _request_status("GET", f"{issuer}/v1/ping/", headers=bearer_headers)
+    if stale_status != 401:
+        raise SmokeError(f"Rotated access token remained usable: {stale_status} {stale_body!r}")
+
+    next_headers = {"Authorization": f"Bearer {next_access_token}"}
+    _request_json("GET", f"{issuer}/v1/ping/", headers=next_headers)
+    revoked_status, revoked_body = _request_status(
+        "POST",
+        f"{issuer}/oauth/revoke",
+        form={
+            "token": next_refresh_token,
+            "token_type_hint": "refresh_token",
+            "client_id": client_id,
+        },
+    )
+    if revoked_status != 200 or revoked_body:
+        raise SmokeError(f"Refresh-token revocation failed: {revoked_status} {revoked_body!r}")
+    rejected_status, rejected_body = _request_status(
+        "GET",
+        f"{issuer}/v1/ping/",
+        headers=next_headers,
+    )
+    if rejected_status != 401:
+        raise SmokeError(f"Revoked grant remained usable: {rejected_status} {rejected_body!r}")
+
+    grants = _request_json(
+        "GET",
+        f"{api_url}/oauth/grants",
+        headers={
+            "Authorization": f"Bearer {admin_access_token}",
+            "X-Project-ID": "default-project",
+        },
+    )
+    matching = [item for item in grants.get("items", []) if item.get("client_id") == client_id]
+    if len(matching) != 1 or matching[0].get("status") != "revoked":
+        raise SmokeError(f"Dashboard grant state did not reflect revocation: {grants!r}")
 
 
 def parse_args() -> argparse.Namespace:
@@ -447,18 +749,37 @@ def main() -> int:
 
         _wait_for_health("API", f"{api_url}/api/health", args.timeout)
         _wait_for_health("dashboard", f"{dashboard_url}/api/health", args.timeout)
+        _assert_connector_discovery(dashboard_url)
 
         revision = _assert_migration(stack)
         marker = f"YiQiao release marker {secrets.token_hex(8)} persists across restarts."
-        api_key, marker = _exercise_api(api_url, marker)
+        admin_access_token, api_key, marker = _exercise_api(api_url, marker)
+        client_id, oauth_access_token, oauth_refresh_token, connector_marker = _exercise_connector(
+            api_url,
+            dashboard_url,
+            admin_access_token,
+        )
 
         stack.run("down", "--remove-orphans")
         stack.up(rebuild=False)
         _wait_for_health("API", f"{api_url}/api/health", args.timeout)
         _wait_for_health("dashboard", f"{dashboard_url}/api/health", args.timeout)
+        _assert_connector_discovery(dashboard_url)
         _assert_persisted(api_url, api_key, marker)
+        _assert_connector_persisted_and_revoke(
+            api_url,
+            dashboard_url,
+            admin_access_token,
+            client_id,
+            oauth_access_token,
+            oauth_refresh_token,
+            connector_marker,
+        )
 
-        print(f"PASS: migration {revision}; health, admin, API key, add/search, and restart persistence verified.")
+        print(
+            f"PASS: migration {revision}; health, admin, API key, generic OAuth Device Flow, "
+            "add/search, refresh rotation, revocation, and restart persistence verified."
+        )
         succeeded = True
         return 0
     except (SmokeError, OSError, subprocess.SubprocessError) as exc:

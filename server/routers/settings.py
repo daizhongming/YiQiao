@@ -6,6 +6,7 @@ from db import get_db
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from models import APIKey, QuotaPolicy, RequestLog, User, Webhook
 from neo4j_graph import delete_memories as delete_graph_memories
+from oauth_service import revoke_project_grants
 from project_scope import get_project_id, normalize_project_id
 from pydantic import BaseModel, EmailStr
 from server_state import get_memory_instance
@@ -202,6 +203,7 @@ def _purge_project_resources(db: Session, project_id: str) -> None:
     if not isinstance(db, Session):
         return
 
+    revoke_project_grants(db, project_id)
     memory = get_memory_instance()
     storage_project_ids = (project_id, f"{project_id[:108]}.__playground__")
     for storage_project_id in storage_project_ids:

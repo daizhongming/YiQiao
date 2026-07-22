@@ -14,12 +14,16 @@ class DocumentationLocalizationTests(unittest.TestCase):
 
     def test_coverage_manifest_is_complete_and_self_describing(self):
         inventory = docs.parse_coverage(ROOT / docs.DEFAULT_MANIFEST)
-        self.assertEqual(len(inventory.entries), 24)
+        self.assertEqual(len(inventory.entries), 25)
         by_source = {entry.source: entry for entry in inventory.entries}
         self.assertEqual(by_source["README.md"].target, "README.zh-CN.md")
         self.assertEqual(
             by_source["docs/yiqiao/DOCUMENTATION_COVERAGE.md"].target,
             "docs/yiqiao/DOCUMENTATION_COVERAGE.zh-CN.md",
+        )
+        self.assertEqual(
+            by_source["docs/yiqiao/PUBLIC_CONNECTOR.md"].target,
+            "docs/yiqiao/PUBLIC_CONNECTOR.zh-CN.md",
         )
         self.assertEqual(by_source["LICENSE"].reciprocal, "legal-exception")
 

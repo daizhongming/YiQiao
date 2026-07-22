@@ -11,9 +11,9 @@ Docker Compose deployment. The canonical product Quick Start is in the
 
 Run initialization from the repository root. The initializer copies
 `server/.env.example`, generates independent `POSTGRES_PASSWORD`,
-`NEO4J_PASSWORD`, and `JWT_SECRET` values, and preserves an existing `.env`.
-Provider credentials are configured in the browser and do not block service
-startup.
+`NEO4J_PASSWORD`, `JWT_SECRET`, `OAUTH_USER_CODE_HMAC_SECRET`, and
+`OAUTH_AUDIT_HMAC_SECRET` values, and preserves an existing `.env`. Provider
+credentials are configured in the browser and do not block service startup.
 
 Linux and macOS:
 
@@ -40,6 +40,7 @@ service addresses are:
 | API | <http://localhost:8888> | `API_PORT` |
 | OpenAPI | <http://localhost:8888/docs> | follows `API_PORT` |
 | Health | <http://localhost:8888/api/health> | follows `API_PORT` |
+| Connector discovery | <http://localhost:3000/.well-known/service-capabilities> | `OAUTH_ISSUER` |
 
 The default deployment pulls the configured release images. To build the API
 and dashboard from this checkout, run the following from the repository root in
@@ -59,6 +60,10 @@ Authentication is enabled and telemetry is disabled by default. The API and
 dashboard bind to loopback, while PostgreSQL and Neo4j remain on the internal
 backend network without host port mappings. Do not expose the services
 directly to the internet; use a trusted TLS reverse proxy or private network.
+For public connectors, set `OAUTH_ISSUER` and `PUBLIC_DASHBOARD_URL` to the
+same external HTTPS origin. The issuer exposes generic OAuth Device Flow with
+PKCE and project-bound, short-lived Bearer tokens through Dashboard proxy
+routes; the API and databases remain private origins.
 
 Persistent application, vector, and export-record data is stored in the
 `postgres_db` volume, graph data in `neo4j_data`, and memory-history SQLite plus
@@ -75,5 +80,6 @@ copy of migrated data.
 - [Operations, backup, upgrade, rollback, and removal](../docs/yiqiao/OPERATIONS.md)
 - [Migration](../docs/yiqiao/MIGRATION.md)
 - [Troubleshooting](../docs/yiqiao/TROUBLESHOOTING.md)
+- [Public connector configuration, security, and operation](../docs/yiqiao/PUBLIC_CONNECTOR.md)
 - [Security policy](../SECURITY.md)
 - [API add/search examples](../README.md#verify-memory-add-and-search)

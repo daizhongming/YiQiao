@@ -1,6 +1,6 @@
 # This file was modified in 2026 by YiQiao contributors. See NOTICE.
 
-.PHONY: init config up up-build up-production down clean logs seed wait-api wait-dashboard bootstrap health build run_local reset-admin-password prune-logs
+.PHONY: init config up up-build up-production down clean logs seed wait-api wait-dashboard bootstrap health build run_local reset-admin-password prune-logs prune-oauth
 
 OUTPUT ?= text
 API_PORT ?= 8888
@@ -90,6 +90,13 @@ reset-admin-password:
 
 prune-logs:
 	@$(COMPOSE) exec -T -e REQUEST_LOG_RETENTION_DAYS="$(REQUEST_LOG_RETENTION_DAYS)" -e PYTHONPATH=/app yiqiao python scripts/prune_request_logs.py
+
+prune-oauth:
+	@$(COMPOSE) exec -T \
+		-e OAUTH_CLEANUP_BATCH_SIZE="$(OAUTH_CLEANUP_BATCH_SIZE)" \
+		-e OAUTH_AUDIT_RETENTION_DAYS="$(OAUTH_AUDIT_RETENTION_DAYS)" \
+		-e OAUTH_REFRESH_REPLAY_GRACE_SECONDS="$(OAUTH_REFRESH_REPLAY_GRACE_SECONDS)" \
+		-e PYTHONPATH=/app yiqiao python scripts/prune_oauth.py
 
 build:
 	$(SOURCE_COMPOSE) build

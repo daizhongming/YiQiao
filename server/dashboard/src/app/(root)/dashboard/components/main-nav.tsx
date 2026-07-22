@@ -53,8 +53,8 @@ const GROUPS: { label: string; items: NavItem[] }[] = [
       { title: "Playground", url: "/playground", icon: MessageSquare },
       { title: "API Keys", url: "/dashboard/api-keys", icon: KeyRound },
       {
-        title: "BossHelper",
-        url: "/dashboard/integrations/boss-helper",
+        title: "Connected Apps",
+        url: "/dashboard/connected-apps",
         icon: Link2,
       },
       {
