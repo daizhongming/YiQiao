@@ -12,6 +12,7 @@ SOURCE_COMPOSE := $(BASE_COMPOSE) -f docker-compose.build.yaml
 PRODUCTION_COMPOSE := $(BASE_COMPOSE) -f docker-compose.production.yaml
 RELEASE_COMPOSE := $(BASE_COMPOSE) -f docker-compose.production.yaml -f docker-compose.build.yaml
 E2E_COMPOSE := $(SOURCE_COMPOSE) -f docker-compose.e2e.yaml
+COMPOSE_CONFIG_PUBLIC_ORIGIN ?= https://dashboard.example.invalid
 PYTHON_PATHS := mem0 yiqiao server tests scripts
 PYTEST_ARGS ?=
 
@@ -88,8 +89,8 @@ compose-config:
 	@test -f $(COMPOSE_DIR)/.env || (echo "error: server/.env is missing; run 'make init' first" && exit 2)
 	cd $(COMPOSE_DIR) && $(BASE_COMPOSE) config --quiet
 	cd $(COMPOSE_DIR) && $(SOURCE_COMPOSE) config --quiet
-	cd $(COMPOSE_DIR) && $(PRODUCTION_COMPOSE) config --quiet
-	cd $(COMPOSE_DIR) && $(RELEASE_COMPOSE) config --quiet
+	cd $(COMPOSE_DIR) && OAUTH_ISSUER=$(COMPOSE_CONFIG_PUBLIC_ORIGIN) PUBLIC_DASHBOARD_URL=$(COMPOSE_CONFIG_PUBLIC_ORIGIN) $(PRODUCTION_COMPOSE) config --quiet
+	cd $(COMPOSE_DIR) && OAUTH_ISSUER=$(COMPOSE_CONFIG_PUBLIC_ORIGIN) PUBLIC_DASHBOARD_URL=$(COMPOSE_CONFIG_PUBLIC_ORIGIN) $(RELEASE_COMPOSE) config --quiet
 	cd $(COMPOSE_DIR) && $(E2E_COMPOSE) config --quiet
 
 images:
