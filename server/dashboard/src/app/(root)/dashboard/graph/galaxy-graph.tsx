@@ -1,3 +1,5 @@
+// This file was modified in 2026 by YiQiao contributors. See NOTICE.
+
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -620,15 +622,28 @@ export default function GalaxyGraph({
   }, [graphNodes]);
 
   useEffect(() => {
-    const controls = graphRef.current?.controls() as
-      | OrbitControlsLike
-      | undefined;
-    if (!controls) return;
+    const graph = graphRef.current;
+    const controls = graph?.controls() as OrbitControlsLike | undefined;
+    if (!graph || !controls) return;
     controls.autoRotate = orbiting;
     controls.autoRotateSpeed = 0.34;
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
     controls.update?.();
+
+    let animationFrame = 0;
+    const renderOrbit = () => {
+      controls.update?.();
+      graph.refresh();
+      animationFrame = window.requestAnimationFrame(renderOrbit);
+    };
+    if (orbiting) {
+      animationFrame = window.requestAnimationFrame(renderOrbit);
+    }
+
+    return () => {
+      if (animationFrame) window.cancelAnimationFrame(animationFrame);
+    };
   }, [orbiting]);
 
   useEffect(() => {
@@ -740,7 +755,7 @@ export default function GalaxyGraph({
 
   return (
     <section
-      className="relative isolate h-[calc(100dvh-176px)] min-h-[620px] max-h-[920px] overflow-hidden rounded-md bg-[#05070a] text-white shadow-[0_18px_45px_rgba(0,0,0,0.22)]"
+      className="relative isolate h-[calc(100dvh-190px)] min-h-[480px] max-h-[920px] overflow-hidden rounded-md bg-[#05070a] text-white shadow-[0_18px_45px_rgba(0,0,0,0.22)] sm:h-[calc(100dvh-176px)] sm:min-h-[620px]"
       aria-label={
         language === "zh"
           ? "\u4ea4\u4e92\u5f0f\u8bb0\u5fc6\u661f\u56fe"
@@ -757,6 +772,7 @@ export default function GalaxyGraph({
             graphData={{ nodes: graphNodes, links: graphLinks }}
             backgroundColor={BACKGROUND}
             showNavInfo={false}
+            controlType="orbit"
             nodeId="id"
             nodeLabel={(node) =>
               `<div style="max-width:260px;padding:8px 10px;background:#11151c;border:1px solid rgba(255,255,255,.14);color:#fff;font:12px/1.45 sans-serif"><div style="color:${node.color};margin-bottom:3px">${escapeHtml(copy[node.group])}</div>${escapeHtml(truncate(node.title || node.id))}</div>`
@@ -1003,7 +1019,7 @@ export default function GalaxyGraph({
       </div>
 
       {mobilePanelOpen ? (
-        <div className="absolute inset-x-0 bottom-0 z-40 flex h-[58%] min-h-[340px] border-t border-white/15 bg-[#0b0e13] shadow-[0_-18px_45px_rgba(0,0,0,0.45)] lg:hidden">
+        <div className="absolute inset-x-0 bottom-0 z-40 flex h-[62%] min-h-[280px] border-t border-white/15 bg-[#0b0e13] shadow-[0_-18px_45px_rgba(0,0,0,0.45)] sm:h-[58%] sm:min-h-[340px] lg:hidden">
           {!selectedNode ? (
             <button
               type="button"

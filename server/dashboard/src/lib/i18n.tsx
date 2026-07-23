@@ -1,3 +1,5 @@
+// This file was modified in 2026 by YiQiao contributors. See NOTICE.
+
 "use client";
 
 import {
@@ -123,6 +125,8 @@ const translations: Record<string, string> = {
   "Log out": "退出登录",
   "Expand sidebar": "展开侧边栏",
   "Collapse sidebar": "收起侧边栏",
+  Navigation: "导航",
+  "Open navigation": "打开导航",
   "Switch to English": "切换到英文",
   "Switch to Chinese": "切换到中文",
   "Default organization": "默认组织",

@@ -1,3 +1,5 @@
+// This file was modified in 2026 by YiQiao contributors. See NOTICE.
+
 "use client";
 
 import Link from "next/link";
@@ -293,7 +295,7 @@ export default function UsageLimitsPage() {
           </Link>
         </Button>
         <Card className="border-memBorder-primary">
-          <CardContent className="flex min-h-40 items-center gap-3 p-6">
+          <CardContent className="flex min-h-40 flex-col items-start gap-3 p-5 sm:flex-row sm:items-center sm:p-6">
             <ShieldAlert className="size-5 text-onSurface-default-secondary" />
             <p className="text-sm">
               Owner access is required to manage usage limits.
@@ -373,7 +375,7 @@ export default function UsageLimitsPage() {
 
       <Card className="border-memBorder-primary overflow-hidden">
         <CardHeader className="border-b border-memBorder-primary pb-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <CardTitle className="text-sm">Policies</CardTitle>
             <span className="text-xs text-onSurface-default-secondary">
               Default: Unlimited

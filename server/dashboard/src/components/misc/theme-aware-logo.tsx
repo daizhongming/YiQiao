@@ -3,9 +3,11 @@
 export default function ThemeAwareLogo({
   width = 120,
   height = 40,
+  compact = false,
 }: {
   width?: number;
   height?: number;
+  compact?: boolean;
 }) {
   return (
     <div
@@ -22,9 +24,11 @@ export default function ThemeAwareLogo({
           backgroundImage: "url('/favicon.svg')",
         }}
       />
-      <span className="text-lg font-semibold text-onSurface-default-primary">
-        YiQiao
-      </span>
+      {!compact && (
+        <span className="yiqiao-display text-lg font-semibold text-onSurface-default-primary">
+          YiQiao
+        </span>
+      )}
     </div>
   );
 }

@@ -1,6 +1,7 @@
 // This file was modified in 2026 by YiQiao contributors. See NOTICE.
 
 import "@/styles/globals.css";
+import "@/styles/yiqiao-theme.css";
 import React from "react";
 import { cookies } from "next/headers";
 import { Inter, InterDisplay, Roboto, Fustat, DMMono } from "../(root)/fonts";
@@ -34,6 +35,7 @@ export default async function AuthLayout({
   return (
     <html
       lang={initialLanguage === "zh" ? "zh-CN" : "en"}
+      data-brand-theme="yiqiao"
       className={cn(
         Fustat.variable,
         InterDisplay.variable,

@@ -36,6 +36,7 @@ import {
   SidebarRail,
 } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
+import { useI18n } from "@/lib/i18n";
 
 type NavItem = {
   title: string;
@@ -128,9 +129,14 @@ const itemIsActive = (pathname: string, item: NavItem) => {
 export function MainNav({
   className,
   collapsed = false,
+  onNavigate,
   ...props
-}: HTMLAttributes<HTMLElement> & { collapsed?: boolean }) {
+}: HTMLAttributes<HTMLElement> & {
+  collapsed?: boolean;
+  onNavigate?: () => void;
+}) {
   const pathname = usePathname();
+  const { t } = useI18n();
 
   return (
     <Sidebar
@@ -155,7 +161,7 @@ export function MainNav({
               >
                 {!collapsed && (
                   <SidebarGroupLabel className="mb-0 h-7 px-2 text-[10px] font-medium text-onSurface-default-tertiary">
-                    {group.label}
+                    {t(group.label)}
                   </SidebarGroupLabel>
                 )}
                 {group.items.map((item) => {
@@ -166,7 +172,7 @@ export function MainNav({
                       <Icon className="size-4 shrink-0" />
                       {!collapsed && (
                         <span className="min-w-0 flex-1 truncate">
-                          {item.title}
+                          {t(item.title)}
                         </span>
                       )}
                       {!collapsed && item.external && (
@@ -181,15 +187,16 @@ export function MainNav({
                         asChild
                         collapsed={collapsed}
                         active={active}
-                        tooltip={collapsed ? item.title : undefined}
+                        tooltip={collapsed ? t(item.title) : undefined}
                       >
                         {item.external ? (
                           <a
                             href={item.url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            aria-label={collapsed ? item.title : undefined}
-                            title={collapsed ? item.title : undefined}
+                            aria-label={collapsed ? t(item.title) : undefined}
+                            title={collapsed ? t(item.title) : undefined}
+                            onClick={onNavigate}
                             className={cn(
                               "flex w-full items-center",
                               collapsed ? "justify-center" : "gap-2",
@@ -200,8 +207,9 @@ export function MainNav({
                         ) : (
                           <Link
                             href={item.url}
-                            aria-label={collapsed ? item.title : undefined}
-                            title={collapsed ? item.title : undefined}
+                            aria-label={collapsed ? t(item.title) : undefined}
+                            title={collapsed ? t(item.title) : undefined}
+                            onClick={onNavigate}
                             className={cn(
                               "flex w-full items-center",
                               collapsed ? "justify-center" : "gap-2",

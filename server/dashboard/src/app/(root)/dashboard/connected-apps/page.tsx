@@ -1,3 +1,5 @@
+// This file was modified in 2026 by YiQiao contributors. See NOTICE.
+
 "use client";
 
 import {
@@ -103,7 +105,7 @@ function statusClasses(status: string) {
     case "approved":
       return "border-onSurface-positive-secondary bg-surface-positive-primary text-onSurface-positive-primary";
     case "pending":
-      return "border-memBorder-secondary bg-surface-default-tertiary text-onSurface-default-secondary";
+      return "border-[color:var(--yiqiao-semantic-warning)] bg-surface-default-brand text-[color:var(--yiqiao-semantic-warning)]";
     case "denied":
     case "revoked":
     case "expired":
@@ -504,7 +506,7 @@ export default function ConnectedAppsPage() {
           <Link2 className="size-5" />
         </div>
         <div className="min-w-0">
-          <h1 className="text-xl font-semibold sm:text-2xl">
+          <h1 className="yiqiao-display text-xl font-semibold sm:text-2xl">
             {t("Connected Apps")}
           </h1>
           <p className="mt-1 max-w-2xl text-sm text-onSurface-default-secondary">

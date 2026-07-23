@@ -200,7 +200,7 @@ export default function EntitiesPage() {
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex max-w-full gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="flex w-full max-w-full gap-2 overflow-x-auto pb-1 [scrollbar-width:none] sm:w-auto [&::-webkit-scrollbar]:hidden">
           {ENTITY_TYPES.map((type) => (
             <Button
               key={type}
@@ -218,13 +218,13 @@ export default function EntitiesPage() {
             </Button>
           ))}
         </div>
-        <div className="flex min-w-0 gap-2">
-          <div className="relative min-w-0">
+        <div className="flex w-full min-w-0 gap-2 sm:w-auto">
+          <div className="relative min-w-0 flex-1 sm:flex-none">
             <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-onSurface-default-tertiary" />
             <Input
               value={search}
               placeholder="Search entity ID"
-              className="w-[220px] max-w-full pl-9"
+              className="w-full pl-9 sm:w-[220px]"
               onChange={(event) => setSearch(event.target.value)}
             />
           </div>

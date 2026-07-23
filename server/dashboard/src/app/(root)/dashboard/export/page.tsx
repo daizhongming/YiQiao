@@ -439,9 +439,10 @@ export default function ExportPage() {
             </a>
           </p>
         </div>
-        <div className="flex shrink-0 items-center gap-2 self-end sm:self-auto">
+        <div className="flex w-full shrink-0 items-center gap-2 sm:w-auto sm:self-auto">
           <Button
             variant="outline"
+            className="flex-1 sm:flex-none"
             onClick={() => void loadJobs(page, debouncedSearch, true)}
             disabled={isRefreshing}
           >
@@ -450,7 +451,11 @@ export default function ExportPage() {
             />
             Refresh
           </Button>
-          <Button variant="primary" onClick={() => setIsCreateOpen(true)}>
+          <Button
+            variant="primary"
+            className="flex-1 sm:flex-none"
+            onClick={() => setIsCreateOpen(true)}
+          >
             <Plus className="mr-2 size-4" />
             Create Export
           </Button>
@@ -578,8 +583,8 @@ export default function ExportPage() {
         }}
       >
         <DialogPrimitive.Portal>
-          <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/30 data-[state=closed]:animate-out data-[state=open]:animate-in data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
-          <DialogPrimitive.Content className="fixed inset-y-0 right-0 z-50 flex w-full flex-col overflow-hidden border-l border-memBorder-primary bg-surface-default-primary shadow-xl outline-none data-[state=closed]:animate-out data-[state=open]:animate-in data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:w-[min(720px,50vw)]">
+          <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/30 data-[state=closed]:animate-out data-[state=open]:animate-in data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 motion-reduce:animate-none" />
+          <DialogPrimitive.Content className="fixed inset-y-0 right-0 z-50 flex w-full flex-col overflow-hidden border-l border-memBorder-primary bg-surface-default-primary shadow-xl outline-none data-[state=closed]:animate-out data-[state=open]:animate-in data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right motion-reduce:animate-none sm:w-[min(720px,50vw)]">
             <div className="flex h-12 shrink-0 items-center justify-between border-b border-memBorder-primary px-3">
               <DialogPrimitive.Title className="text-lg font-semibold">
                 Create Memory Export
@@ -601,7 +606,7 @@ export default function ExportPage() {
               </DialogPrimitive.Close>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+            <div className="min-h-0 flex-1 overflow-y-auto px-3 py-4 sm:px-4">
               <div className="inline-flex h-8 rounded-md bg-surface-default-secondary">
                 <button
                   type="button"

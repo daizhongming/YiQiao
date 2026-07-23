@@ -5,6 +5,7 @@
 import React from "react";
 import { ThemeProvider } from "@/components/theme-provider";
 import "@/styles/globals.css";
+import "@/styles/yiqiao-theme.css";
 import { ClientLayout } from "./clientLayout";
 import { cn } from "@/lib/utils";
 import { Inter, InterDisplay, Roboto, Fustat, DMMono } from "./fonts";
@@ -33,6 +34,7 @@ export function DashboardClientLayout({
   return (
     <html
       lang={initialLanguage === "zh" ? "zh-CN" : "en"}
+      data-brand-theme="yiqiao"
       data-scroll-behavior="smooth"
       suppressHydrationWarning
     >
@@ -51,7 +53,7 @@ export function DashboardClientLayout({
             <AuthProvider>
               <ThemeProvider
                 attribute="class"
-                defaultTheme="light"
+                defaultTheme="system"
                 enableSystem
                 disableTransitionOnChange
               >

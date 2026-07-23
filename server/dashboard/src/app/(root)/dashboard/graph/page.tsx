@@ -1,3 +1,5 @@
+// This file was modified in 2026 by YiQiao contributors. See NOTICE.
+
 "use client";
 
 import dynamic from "next/dynamic";
@@ -55,7 +57,7 @@ function pageCopy(language: "en" | "zh") {
 function GraphLoading() {
   return (
     <div
-      className="relative h-[calc(100dvh-176px)] min-h-[620px] max-h-[920px] overflow-hidden rounded-md bg-[#05070a]"
+      className="relative h-[calc(100dvh-190px)] min-h-[480px] max-h-[920px] overflow-hidden rounded-md bg-[#05070a] sm:h-[calc(100dvh-176px)] sm:min-h-[620px]"
       aria-busy="true"
     >
       <div className="absolute inset-0 animate-pulse opacity-70">
@@ -93,7 +95,7 @@ function GraphState({
   danger?: boolean;
 }) {
   return (
-    <div className="flex min-h-[620px] items-center justify-center rounded-md border border-memBorder-primary bg-surface-default-secondary px-4 py-8">
+    <div className="flex min-h-[480px] items-center justify-center rounded-md border border-memBorder-primary bg-surface-default-secondary px-4 py-8 sm:min-h-[620px]">
       <div className="w-full max-w-md text-center">
         <span
           className={`mx-auto flex size-12 items-center justify-center rounded-full ${
@@ -180,7 +182,7 @@ export default function GraphPage() {
       <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
           <h1 className="text-xl font-semibold font-fustat">{copy.title}</h1>
-          <p className="mt-1 truncate text-xs text-onSurface-default-tertiary">
+          <p className="mt-1 break-all text-xs text-onSurface-default-tertiary sm:truncate">
             {copy.project}
             {status?.project_id ? ` / ${status.project_id}` : ""}
           </p>

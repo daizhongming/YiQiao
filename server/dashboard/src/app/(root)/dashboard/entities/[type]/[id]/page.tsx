@@ -1,3 +1,5 @@
+// This file was modified in 2026 by YiQiao contributors. See NOTICE.
+
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -325,7 +327,7 @@ export default function EntityDetailPage() {
         </section>
       )}
 
-      <div className="grid h-11 max-w-[424px] grid-cols-2 rounded-md bg-surface-default-tertiary p-1">
+      <div className="grid h-11 w-full max-w-[424px] grid-cols-2 rounded-md bg-surface-default-tertiary p-1">
         {(
           [
             { value: "memories", label: "Memories" },
@@ -350,7 +352,7 @@ export default function EntityDetailPage() {
       {activeTab === "memories" ? (
         <div className="space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex max-w-full gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <div className="flex w-full max-w-full gap-2 overflow-x-auto pb-1 [scrollbar-width:none] sm:w-auto [&::-webkit-scrollbar]:hidden">
               {["overview", ...categories].map((item) => (
                 <Button
                   key={item}
@@ -368,13 +370,13 @@ export default function EntityDetailPage() {
                 </Button>
               ))}
             </div>
-            <div className="flex min-w-0 gap-2">
-              <div className="relative min-w-0">
+            <div className="flex w-full min-w-0 gap-2 sm:w-auto">
+              <div className="relative min-w-0 flex-1 sm:flex-none">
                 <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-onSurface-default-tertiary" />
                 <Input
                   value={memorySearch}
                   placeholder="Search memories"
-                  className="w-[220px] max-w-full pl-9"
+                  className="w-full pl-9 sm:w-[220px]"
                   onChange={(event) => setMemorySearch(event.target.value)}
                 />
               </div>
@@ -482,7 +484,7 @@ export default function EntityDetailPage() {
               />
             </Card>
           )}
-          <div className="flex items-center justify-between text-sm text-onSurface-default-tertiary">
+          <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-onSurface-default-tertiary">
             <span>
               {requestData.total}
               {language === "zh" ? " 个请求" : " requests"}

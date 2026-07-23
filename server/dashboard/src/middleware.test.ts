@@ -8,6 +8,7 @@ describe("Dashboard middleware connector paths", () => {
   it.each([
     "/.well-known/oauth-authorization-server",
     "/.well-known/service-capabilities",
+    "/api/backend/auth/login",
     "/oauth/device_authorization",
     "/oauth/health",
     "/oauth/revoke",

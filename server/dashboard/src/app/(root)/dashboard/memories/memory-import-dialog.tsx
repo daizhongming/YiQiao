@@ -1,3 +1,5 @@
+// This file was modified in 2026 by YiQiao contributors. See NOTICE.
+
 "use client";
 
 import axios from "axios";
@@ -967,7 +969,7 @@ export function MemoryImportDialog({
         </Button>
       </DialogTrigger>
       <DialogContent className="flex max-h-[min(90vh,760px)] w-[calc(100vw-24px)] max-w-[680px] flex-col gap-0 overflow-hidden p-0">
-        <DialogHeader className="border-b border-memBorder-primary px-5 py-4 pr-12 text-left">
+        <DialogHeader className="border-b border-memBorder-primary py-4 pl-4 pr-12 text-left sm:pl-5">
           <DialogTitle className="text-base">
             {isZh ? "导入聊天记忆" : "Import chat memories"}
           </DialogTitle>
@@ -984,7 +986,7 @@ export function MemoryImportDialog({
             {isZh ? "正在恢复导入进度" : "Restoring import progress"}
           </div>
         ) : !job ? (
-          <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5">
             <input
               ref={documentInputRef}
               className="hidden"
@@ -1290,9 +1292,17 @@ export function MemoryImportDialog({
               />
             </div>
 
-            <div className="mt-5 grid grid-cols-4 divide-x divide-memBorder-primary border-y border-memBorder-primary">
-              {stages.map((stage) => (
-                <div key={stage.key} className="min-w-0 px-2 py-3 sm:px-3">
+            <div className="mt-5 grid grid-cols-2 border-y border-memBorder-primary sm:grid-cols-4">
+              {stages.map((stage, index) => (
+                <div
+                  key={stage.key}
+                  className={cn(
+                    "min-w-0 px-2 py-3 sm:border-b-0 sm:px-3",
+                    index % 2 === 0 && "border-r border-memBorder-primary",
+                    index < 2 && "border-b border-memBorder-primary",
+                    index < 3 && "sm:border-r sm:border-memBorder-primary",
+                  )}
+                >
                   <div className="flex items-center gap-1.5">
                     {stage.state === "active" ? (
                       <LoaderCircle className="size-3.5 shrink-0 animate-spin text-onSurface-default-primary" />
@@ -1410,7 +1420,7 @@ export function MemoryImportDialog({
             {(sourceRetryAvailable || graphFailed) && (
               <div className="mt-4 divide-y divide-memBorder-primary border-y border-memBorder-primary">
                 {sourceRetryAvailable && (
-                  <div className="flex items-center justify-between gap-3 py-3">
+                  <div className="flex flex-col items-stretch gap-3 py-3 sm:flex-row sm:items-center sm:justify-between">
                     <div className="min-w-0">
                       <p
                         className={cn(
@@ -1463,7 +1473,7 @@ export function MemoryImportDialog({
                   </div>
                 )}
                 {graphFailed && (
-                  <div className="flex items-start justify-between gap-3 py-3">
+                  <div className="flex flex-col items-stretch gap-3 py-3 sm:flex-row sm:items-start sm:justify-between">
                     <div className="min-w-0">
                       <p className="text-xs font-medium text-onSurface-danger-primary">
                         {isZh ? "图谱同步失败" : "Graph sync failed"}

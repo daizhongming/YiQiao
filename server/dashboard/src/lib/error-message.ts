@@ -9,6 +9,8 @@ const ERROR_TRANSLATIONS: Record<string, string> = {
   "Request failed": "请求失败",
   Unauthorized: "未授权",
   "Network Error": "网络连接失败",
+  "YiQiao service is temporarily unavailable.":
+    "忆桥服务暂时不可用，请稍后重试。",
   "Field required": "此字段为必填项",
   "JWT_SECRET is not configured.": "JWT_SECRET 尚未配置。",
   "Refresh token is no longer valid.": "刷新令牌已失效，请重新登录。",

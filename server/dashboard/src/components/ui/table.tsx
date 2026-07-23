@@ -1,26 +1,44 @@
+// This file was modified in 2026 by YiQiao contributors. See NOTICE.
+
 import * as React from "react";
 
 import { cn } from "@/lib/utils";
 
-const Table = React.forwardRef<
-  HTMLTableElement,
-  React.HTMLAttributes<HTMLTableElement>
->(({ className, ...props }, ref) => (
-  <div className="relative w-full overflow-auto">
-    <table
-      ref={ref}
-      className={cn("w-full caption-bottom text-sm", className)}
-      {...props}
-    />
-  </div>
-));
+interface TableProps extends React.HTMLAttributes<HTMLTableElement> {
+  containerClassName?: string;
+  containerLabel?: string;
+}
+
+const Table = React.forwardRef<HTMLTableElement, TableProps>(
+  ({ className, containerClassName, containerLabel, ...props }, ref) => (
+    <div
+      role="region"
+      aria-label={containerLabel ?? props["aria-label"] ?? "Scrollable table"}
+      tabIndex={0}
+      className={cn(
+        "relative w-full overflow-x-auto overscroll-x-contain rounded-[inherit] focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring",
+        containerClassName,
+      )}
+    >
+      <table
+        ref={ref}
+        className={cn("w-full min-w-full caption-bottom text-sm", className)}
+        {...props}
+      />
+    </div>
+  ),
+);
 Table.displayName = "Table";
 
 const TableHeader = React.forwardRef<
   HTMLTableSectionElement,
   React.HTMLAttributes<HTMLTableSectionElement>
 >(({ className, ...props }, ref) => (
-  <thead ref={ref} className={cn("[&_tr]:border-b", className)} {...props} />
+  <thead
+    ref={ref}
+    className={cn("[&_tr]:border-b [&_tr]:border-memBorder-primary", className)}
+    {...props}
+  />
 ));
 TableHeader.displayName = "TableHeader";
 
@@ -58,7 +76,7 @@ const TableRow = React.forwardRef<
   <tr
     ref={ref}
     className={cn(
-      "border-b dark:border-memBorder-secondary transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted",
+      "border-b border-memBorder-primary transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted motion-reduce:transition-none",
       className,
     )}
     {...props}
