@@ -11,9 +11,10 @@ Docker Compose deployment. The canonical product Quick Start is in the
 
 Run initialization from the repository root. The initializer copies
 `server/.env.example`, generates independent `POSTGRES_PASSWORD`,
-`NEO4J_PASSWORD`, `JWT_SECRET`, `OAUTH_USER_CODE_HMAC_SECRET`, and
-`OAUTH_AUDIT_HMAC_SECRET` values, and preserves an existing `.env`. Provider
-credentials are configured in the browser and do not block service startup.
+`NEO4J_PASSWORD`, `JWT_SECRET`, `OAUTH_DEVICE_CODE_SECRET`,
+`OAUTH_AUDIT_HMAC_SECRET`, and `OAUTH_PROXY_HMAC_SECRET` values, and preserves
+an existing `.env`. Provider credentials are configured in the browser and do
+not block service startup.
 
 Linux and macOS:
 
@@ -63,7 +64,17 @@ directly to the internet; use a trusted TLS reverse proxy or private network.
 For public connectors, set `OAUTH_ISSUER` and `PUBLIC_DASHBOARD_URL` to the
 same external HTTPS origin. The issuer exposes generic OAuth Device Flow with
 PKCE and project-bound, short-lived Bearer tokens through Dashboard proxy
-routes; the API and databases remain private origins.
+routes; the API and databases remain private origins. HTTP loopback connector
+testing additionally requires `OAUTH_ALLOW_INSECURE_LOOPBACK=true`; never
+enable that flag in production. The Dashboard signs the connector transport
+peer before proxying to the API. Set `OAUTH_GATEWAY_RATE_LIMIT_CONFIRMED=true`
+only when the sole ingress gateway replaces `X-Forwarded-For` with exactly one
+validated client IP; otherwise the Dashboard socket peer is authoritative.
+
+This connector release supports user-mediated Device Authorization and refresh
+only. It does not implement Client Credentials, RFC 8693 Token Exchange, or an
+MCP Streamable HTTP endpoint. MCP remains an ADR evaluation and cannot bypass
+OAuth or project isolation.
 
 Persistent application, vector, and export-record data is stored in the
 `postgres_db` volume, graph data in `neo4j_data`, and memory-history SQLite plus

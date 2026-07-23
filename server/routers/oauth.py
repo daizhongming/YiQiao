@@ -132,21 +132,30 @@ def oauth_health():
 @router.post("/oauth/device_authorization")
 async def device_authorization(request: Request, db: Session = Depends(get_db)):
     try:
+        context = oauth_service.audit_context(request)
+        oauth_service.enforce_rate_limit(db, "device_authorization", context)
         form = await _strict_form(
             request,
             allowed={"client_id", "scope", "audience", "code_challenge", "code_challenge_method"},
             required={"client_id", "scope", "audience", "code_challenge", "code_challenge_method"},
         )
+        client_id = oauth_service.rate_limit_public_client(
+            db,
+            "device_authorization",
+            context,
+            form["client_id"],
+        )
         issuer = oauth_service.issuer_for_request(request)
         return oauth_service.create_device_authorization(
             db,
-            client_id=form["client_id"],
+            client_id=client_id,
             scope=form["scope"],
             audience=form["audience"],
             code_challenge=form["code_challenge"],
             code_challenge_method=form["code_challenge_method"],
             issuer=issuer,
-            context=oauth_service.audit_context(request),
+            context=context,
+            rate_limit_client=False,
         )
     except oauth_service.OAuthProtocolError as exc:
         db.rollback()
@@ -159,21 +168,24 @@ async def device_authorization(request: Request, db: Session = Depends(get_db)):
 @router.post("/oauth/token")
 async def token(request: Request, db: Session = Depends(get_db)):
     try:
+        context = oauth_service.audit_context(request)
+        oauth_service.enforce_rate_limit(db, "token", context)
         form = await _strict_form(
             request,
             allowed={"grant_type", "device_code", "client_id", "code_verifier", "refresh_token"},
             required={"grant_type", "client_id"},
         )
-        context = oauth_service.audit_context(request)
+        client_id = oauth_service.rate_limit_public_client(db, "token", context, form["client_id"])
         if form["grant_type"] == DEVICE_GRANT_TYPE:
             if not form.get("device_code") or not form.get("code_verifier") or form.get("refresh_token"):
                 raise oauth_service.OAuthProtocolError("invalid_request", "The Device Flow form is incomplete.")
             return oauth_service.exchange_device_code(
                 db,
                 device_code=form["device_code"],
-                client_id=form["client_id"],
+                client_id=client_id,
                 code_verifier=form["code_verifier"],
                 context=context,
+                rate_limit_client=False,
             )
         if form["grant_type"] == "refresh_token":
             if not form.get("refresh_token") or form.get("device_code") or form.get("code_verifier"):
@@ -181,8 +193,9 @@ async def token(request: Request, db: Session = Depends(get_db)):
             return oauth_service.refresh_access_token(
                 db,
                 refresh_token=form["refresh_token"],
-                client_id=form["client_id"],
+                client_id=client_id,
                 context=context,
+                rate_limit_client=False,
             )
         raise oauth_service.OAuthProtocolError("unsupported_grant_type", "The requested grant type is unsupported.")
     except oauth_service.OAuthProtocolError as exc:
@@ -193,11 +206,14 @@ async def token(request: Request, db: Session = Depends(get_db)):
 @router.post("/oauth/revoke")
 async def revoke_token(request: Request, db: Session = Depends(get_db)):
     try:
+        context = oauth_service.audit_context(request)
+        oauth_service.enforce_rate_limit(db, "revocation", context)
         form = await _strict_form(
             request,
             allowed={"token", "token_type_hint", "client_id"},
             required={"token", "client_id"},
         )
+        client_id = oauth_service.rate_limit_public_client(db, "revocation", context, form["client_id"])
         token_type_hint = form.get("token_type_hint")
         if token_type_hint not in {None, "access_token", "refresh_token"}:
             token_type_hint = None
@@ -205,8 +221,9 @@ async def revoke_token(request: Request, db: Session = Depends(get_db)):
             db,
             token=form["token"],
             token_type_hint=token_type_hint,
-            client_id=form["client_id"],
-            context=oauth_service.audit_context(request),
+            client_id=client_id,
+            context=context,
+            rate_limit_client=False,
         )
         return Response(status_code=200)
     except oauth_service.OAuthProtocolError as exc:
@@ -221,11 +238,19 @@ def lookup_device_request(
     _user: User = Depends(require_dashboard_user),
     db: Session = Depends(get_db),
 ):
-    return oauth_service.lookup_device_request(
-        db,
-        user_code=body.user_code,
-        context=_management_context(request),
-    )
+    try:
+        return oauth_service.lookup_device_request(
+            db,
+            user_code=body.user_code,
+            context=_management_context(request),
+        )
+    except oauth_service.OAuthProtocolError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail=exc.description,
+            headers=exc.headers,
+        ) from exc
 
 
 @router.post("/oauth/device-requests/{request_id}/approve")

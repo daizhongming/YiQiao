@@ -1,12 +1,23 @@
 // This file was modified in 2026 by YiQiao contributors. See NOTICE.
 
+import { createHmac } from "node:crypto";
+import { isIP } from "node:net";
+
 const MAX_PROXY_BODY_BYTES = 10 * 1024 * 1024;
 const PROXY_TIMEOUT_MS = 30_000;
+const PROXY_CLIENT_IP_HEADER = "x-yiqiao-proxy-client-ip";
+const PROXY_SIGNATURE_HEADER = "x-yiqiao-proxy-signature";
+const PROXY_TIMESTAMP_HEADER = "x-yiqiao-proxy-timestamp";
+const TRANSPORT_PEER_HEADER = "x-yiqiao-transport-peer";
+const TRANSPORT_PEER_ACTIVE_MARKER = Symbol.for(
+  "yiqiao.transportPeerPreloadActive",
+);
 const FORWARDED_REQUEST_HEADERS = [
   "accept",
   "authorization",
   "content-type",
   "user-agent",
+  "x-project-id",
 ] as const;
 const FORWARDED_RESPONSE_HEADERS = [
   "content-type",
@@ -50,7 +61,87 @@ function connectorError(status: number, code: string, description: string) {
   );
 }
 
-function requestHeaders(request: Request): Headers {
+function normalizeIp(value: string | null): string | null {
+  const candidate = value?.trim() ?? "";
+  if (!candidate) return null;
+
+  let address = candidate;
+  let scope = "";
+  const scopeSeparator = candidate.indexOf("%");
+  if (scopeSeparator !== -1) {
+    if (candidate.indexOf("%", scopeSeparator + 1) !== -1) return null;
+    address = candidate.slice(0, scopeSeparator);
+    scope = candidate.slice(scopeSeparator + 1);
+    if (!/^[A-Za-z0-9_.-]{1,64}$/.test(scope) || isIP(address) !== 6) {
+      return null;
+    }
+  }
+
+  const version = isIP(address);
+  if (version === 4) return address;
+  if (version !== 6) return null;
+
+  try {
+    const hostname = new URL(`http://[${address}]/`).hostname;
+    const normalized = hostname.slice(1, -1);
+    return scope ? `${normalized}%${scope}` : normalized;
+  } catch {
+    return null;
+  }
+}
+
+function proxySigningSecret(): string | null {
+  const value = (process.env.OAUTH_PROXY_HMAC_SECRET || "").trim();
+  return Buffer.byteLength(value, "utf8") >= 32 ? value : null;
+}
+
+function transportPeerPreloadActive(): boolean {
+  return Reflect.get(globalThis, TRANSPORT_PEER_ACTIVE_MARKER) === true;
+}
+
+async function readRequestBody(request: Request): Promise<ArrayBuffer | null> {
+  if (!request.body) return new ArrayBuffer(0);
+
+  const reader = request.body.getReader();
+  let body = new Uint8Array(0);
+  let totalBytes = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const nextTotal = totalBytes + value.byteLength;
+      if (nextTotal > MAX_PROXY_BODY_BYTES) {
+        await reader.cancel().catch(() => undefined);
+        return null;
+      }
+      if (nextTotal > body.byteLength) {
+        const nextCapacity = Math.min(
+          MAX_PROXY_BODY_BYTES,
+          Math.max(
+            nextTotal,
+            body.byteLength ? body.byteLength * 2 : 64 * 1024,
+          ),
+        );
+        const expanded = new Uint8Array(nextCapacity);
+        expanded.set(body.subarray(0, totalBytes));
+        body = expanded;
+      }
+      body.set(value, totalBytes);
+      totalBytes = nextTotal;
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  return body.buffer.slice(0, totalBytes);
+}
+
+function requestHeaders(
+  request: Request,
+  peer: string,
+  timestamp: string,
+  signature: string,
+): Headers {
   const headers = new Headers();
   for (const name of FORWARDED_REQUEST_HEADERS) {
     const value = request.headers.get(name);
@@ -60,6 +151,9 @@ function requestHeaders(request: Request): Headers {
   if (requestId && /^[A-Za-z0-9._:-]{1,64}$/.test(requestId)) {
     headers.set("x-request-id", requestId);
   }
+  headers.set(PROXY_CLIENT_IP_HEADER, peer);
+  headers.set(PROXY_TIMESTAMP_HEADER, timestamp);
+  headers.set(PROXY_SIGNATURE_HEADER, signature);
   return headers;
 }
 
@@ -87,8 +181,20 @@ export async function proxyPublicConnectorRequest(
     );
   }
 
+  const peer = normalizeIp(request.headers.get(TRANSPORT_PEER_HEADER));
+  const signingSecret = proxySigningSecret();
+  if (!transportPeerPreloadActive() || !peer || !signingSecret) {
+    return connectorError(
+      503,
+      "temporarily_unavailable",
+      "The connector service is not configured.",
+    );
+  }
+
+  const requestUrl = new URL(request.url);
   const upstream = new URL(upstreamPath.replace(/^\//, ""), baseUrl);
-  if (upstream.origin === new URL(request.url).origin) {
+  upstream.search = requestUrl.search;
+  if (upstream.origin === requestUrl.origin) {
     return connectorError(
       503,
       "temporarily_unavailable",
@@ -109,8 +215,16 @@ export async function proxyPublicConnectorRequest(
         "The request body is too large.",
       );
     }
-    body = await request.arrayBuffer();
-    if (body.byteLength > MAX_PROXY_BODY_BYTES) {
+    try {
+      body = (await readRequestBody(request)) ?? undefined;
+    } catch {
+      return connectorError(
+        400,
+        "invalid_request",
+        "The request body could not be read.",
+      );
+    }
+    if (body === undefined) {
       return connectorError(
         413,
         "invalid_request",
@@ -119,11 +233,17 @@ export async function proxyPublicConnectorRequest(
     }
   }
 
+  const timestamp = Math.floor(Date.now() / 1000).toString();
+  const signaturePayload = `v1\n${timestamp}\n${expectedMethod.toUpperCase()}\n${upstream.pathname}${upstream.search}\n${peer}`;
+  const signature = createHmac("sha256", signingSecret)
+    .update(signaturePayload, "utf8")
+    .digest("hex");
+
   let response: Response;
   try {
     response = await fetch(upstream, {
       method: expectedMethod,
-      headers: requestHeaders(request),
+      headers: requestHeaders(request, peer, timestamp, signature),
       body,
       cache: "no-store",
       redirect: "manual",

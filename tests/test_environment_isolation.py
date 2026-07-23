@@ -49,7 +49,8 @@ def _initializer_fixture(tmp_path: Path, script_name: str) -> tuple[Path, Path]:
     shutil.copyfile(PROJECT_ROOT / "scripts" / script_name, script)
     script.chmod(0o755)
     (server_dir / ".env.example").write_text(
-        "POSTGRES_PASSWORD=\nNEO4J_PASSWORD=\nJWT_SECRET=\nOAUTH_USER_CODE_HMAC_SECRET=\nOAUTH_AUDIT_HMAC_SECRET=\n",
+        "POSTGRES_PASSWORD=\nNEO4J_PASSWORD=\nJWT_SECRET=\nOAUTH_ALLOW_INSECURE_LOOPBACK=false\n"
+        "OAUTH_DEVICE_CODE_SECRET=\nOAUTH_AUDIT_HMAC_SECRET=\nOAUTH_PROXY_HMAC_SECRET=\n",
         encoding="utf-8",
     )
     return root, script
@@ -235,6 +236,7 @@ def test_posix_initializer_normalizes_option_like_generated_secrets(tmp_path):
 
     assert result.returncode == 0, result.stdout + result.stderr
     assert set(_initializer_secrets(root).values()) == {f"y{hostile_secret[:63]}"}
+    assert "OAUTH_ALLOW_INSECURE_LOOPBACK=false" in (root / "server" / ".env").read_text(encoding="utf-8")
 
 
 @pytest.mark.skipif(os.name == "nt" or shutil.which("sh") is None, reason="requires a POSIX shell")
@@ -293,6 +295,7 @@ def test_powershell_initializer_generates_neo4j_safe_secrets(tmp_path):
 
     assert result.returncode == 0, result.stdout + result.stderr
     assert all(value.startswith("y") and len(value) == 64 for value in _initializer_secrets(root).values())
+    assert "OAUTH_ALLOW_INSECURE_LOOPBACK=false" in (root / "server" / ".env").read_text(encoding="utf-8")
 
 
 @pytest.mark.skipif(POWERSHELL is None, reason="requires PowerShell")
@@ -334,8 +337,9 @@ def test_smoke_prepare_uses_initializer_and_generated_secrets(monkeypatch, tmp_p
         "POSTGRES_PASSWORD": "generated-postgres",
         "NEO4J_PASSWORD": "generated-neo4j",
         "JWT_SECRET": "generated-jwt",
-        "OAUTH_USER_CODE_HMAC_SECRET": "generated-oauth-user-code",
+        "OAUTH_DEVICE_CODE_SECRET": "generated-oauth-device-code",
         "OAUTH_AUDIT_HMAC_SECRET": "generated-oauth-audit",
+        "OAUTH_PROXY_HMAC_SECRET": "generated-oauth-proxy",
     }
     contents = "".join(f"{key}={value}\n" for key, value in generated.items())
     if preexisting:
@@ -405,7 +409,7 @@ def test_smoke_validates_generic_connector_discovery(monkeypatch):
             "issuer": issuer,
             "oauth_metadata": f"{issuer}/.well-known/oauth-authorization-server",
             "audiences": ["yiqiao:memory-api"],
-            "health_endpoint": f"{issuer}/oauth/health",
+            "health_endpoint": f"{issuer}/api/health",
             "project_selection": {"required": True, "performed_during_authorization": True},
             "memory_api": {
                 "search_endpoint": f"{issuer}/search",
@@ -414,11 +418,7 @@ def test_smoke_validates_generic_connector_discovery(monkeypatch):
                 "scopes": {"read": "memory:read", "write": "memory:write"},
             },
         },
-        f"{issuer}/oauth/health": {
-            "status": "ok",
-            "service_id": "yiqiao",
-            "protocol_version": "1.0",
-        },
+        f"{issuer}/api/health": {"status": "ok"},
     }
     requested = []
 
@@ -431,6 +431,38 @@ def test_smoke_validates_generic_connector_discovery(monkeypatch):
     full_stack_smoke._assert_connector_discovery(issuer)
 
     assert requested == [("GET", url) for url in responses]
+
+
+def test_smoke_exercises_two_distinct_connectors_through_one_lifecycle(monkeypatch):
+    issuer = "https://memory.example"
+    discovered = []
+    exercised = []
+
+    def fake_discovery(observed_issuer):
+        discovered.append(observed_issuer)
+
+    def fake_exercise(api_url, observed_issuer, admin_access_token, spec):
+        exercised.append((api_url, observed_issuer, admin_access_token, spec))
+        return full_stack_smoke.ConnectorState(
+            client_id=f"{spec.client_id_prefix}-dynamic",
+            access_token=f"access-{spec.client_id_prefix}",
+            refresh_token=f"refresh-{spec.client_id_prefix}",
+            marker=f"marker-{spec.client_id_prefix}",
+            memory_user_id=f"user-{spec.client_id_prefix}",
+        )
+
+    monkeypatch.setattr(full_stack_smoke, "_assert_connector_discovery", fake_discovery)
+    monkeypatch.setattr(full_stack_smoke, "_exercise_connector", fake_exercise)
+
+    states = full_stack_smoke._exercise_connectors("https://api.example", issuer, "admin-token")
+
+    assert discovered == [issuer, issuer]
+    assert [call[3] for call in exercised] == list(full_stack_smoke.CONNECTOR_SPECS)
+    assert len(exercised) == 2
+    assert len({spec.client_id_prefix for spec in full_stack_smoke.CONNECTOR_SPECS}) == 2
+    assert len({spec.display_name for spec in full_stack_smoke.CONNECTOR_SPECS}) == 2
+    assert len({state.client_id for state in states}) == 2
+    assert len({state.memory_user_id for state in states}) == 2
 
 
 def test_smoke_checks_both_services_before_and_after_restart():
@@ -447,6 +479,20 @@ def test_smoke_checks_both_services_before_and_after_restart():
     ]
 
     assert service_names == ["API", "dashboard", "API", "dashboard"]
+
+
+def test_compose_requires_explicit_insecure_loopback_opt_in():
+    base = (PROJECT_ROOT / "server" / "docker-compose.yaml").read_text(encoding="utf-8")
+    production = (PROJECT_ROOT / "server" / "docker-compose.production.yaml").read_text(encoding="utf-8")
+    e2e = (PROJECT_ROOT / "server" / "docker-compose.e2e.yaml").read_text(encoding="utf-8")
+
+    assert "OAUTH_ALLOW_INSECURE_LOOPBACK: ${OAUTH_ALLOW_INSECURE_LOOPBACK:-false}" in base
+    assert "OAUTH_GATEWAY_RATE_LIMIT_CONFIRMED: ${OAUTH_GATEWAY_RATE_LIMIT_CONFIRMED:-false}" in base
+    proxy_secret_keys = [line for line in base.splitlines() if line.strip().startswith("OAUTH_PROXY_HMAC_SECRET:")]
+    assert len(proxy_secret_keys) == 2
+    assert 'OAUTH_ALLOW_INSECURE_LOOPBACK: "false"' in production
+    assert 'OAUTH_ALLOW_INSECURE_LOOPBACK: "true"' in e2e
+    assert 'OAUTH_GATEWAY_RATE_LIMIT_CONFIRMED: "false"' in e2e
 
 
 def test_smoke_requires_current_migration_head():

@@ -16,9 +16,12 @@ services:
       DASHBOARD_URL: ${PUBLIC_DASHBOARD_URL:-http://localhost:${DASHBOARD_PORT:-3000}}
       DASHBOARD_URLS: ${DASHBOARD_URLS:-${PUBLIC_DASHBOARD_URL:-http://localhost:${DASHBOARD_PORT:-3000}}}
       JWT_SECRET: ${JWT_SECRET:?Run scripts/init.sh or scripts/init.ps1 before starting YiQiao}
+      OAUTH_ALLOW_INSECURE_LOOPBACK: ${OAUTH_ALLOW_INSECURE_LOOPBACK:-false}
       OAUTH_AUDIT_HMAC_SECRET: ${OAUTH_AUDIT_HMAC_SECRET:?Run scripts/init.sh or scripts/init.ps1 before starting YiQiao}
+      OAUTH_GATEWAY_RATE_LIMIT_CONFIRMED: ${OAUTH_GATEWAY_RATE_LIMIT_CONFIRMED:-false}
       OAUTH_ISSUER: ${OAUTH_ISSUER:-${PUBLIC_DASHBOARD_URL:-http://localhost:${DASHBOARD_PORT:-3000}}}
-      OAUTH_USER_CODE_HMAC_SECRET: ${OAUTH_USER_CODE_HMAC_SECRET:?Run scripts/init.sh or scripts/init.ps1 before starting YiQiao}
+      OAUTH_DEVICE_CODE_SECRET: ${OAUTH_DEVICE_CODE_SECRET:?Run scripts/init.sh or scripts/init.ps1 before starting YiQiao}
+      OAUTH_PROXY_HMAC_SECRET: ${OAUTH_PROXY_HMAC_SECRET:?Run scripts/init.sh or scripts/init.ps1 before starting YiQiao}
       PYTHONDONTWRITEBYTECODE: "1"
       PYTHONUNBUFFERED: "1"
       YIQIAO_POSTHOG_API_KEY: ${YIQIAO_POSTHOG_API_KEY:-}
@@ -100,6 +103,8 @@ services:
       DASHBOARD_URL: ${PUBLIC_DASHBOARD_URL:-http://localhost:${DASHBOARD_PORT:-3000}}
       NEXT_PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:${API_PORT:-8888}}
       NEXT_PUBLIC_INSTANCE_NAME: ${YIQIAO_INSTANCE_NAME:-YiQiao}
+      OAUTH_GATEWAY_RATE_LIMIT_CONFIRMED: ${OAUTH_GATEWAY_RATE_LIMIT_CONFIRMED:-false}
+      OAUTH_PROXY_HMAC_SECRET: ${OAUTH_PROXY_HMAC_SECRET:?Run scripts/init.sh or scripts/init.ps1 before starting YiQiao}
     ports:
       - "${DASHBOARD_BIND_ADDRESS:-127.0.0.1}:${DASHBOARD_PORT:-3000}:3000"
     networks:

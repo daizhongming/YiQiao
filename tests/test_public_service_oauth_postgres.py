@@ -75,7 +75,7 @@ def postgres_oauth(monkeypatch):
     ]
     Base.metadata.create_all(engine, tables=tables)
     sessions = sessionmaker(bind=engine, expire_on_commit=False)
-    monkeypatch.setenv("OAUTH_USER_CODE_HMAC_SECRET", _HMAC_SECRET)
+    monkeypatch.setenv("OAUTH_DEVICE_CODE_SECRET", _HMAC_SECRET)
     monkeypatch.setenv("OAUTH_AUDIT_HMAC_SECRET", _HMAC_SECRET)
 
     user_id = uuid.uuid4()
@@ -157,6 +157,21 @@ def _exchange(postgres_oauth):
         )
 
 
+def _create_device_authorization(postgres_oauth, index: int):
+    verifier = f"postgres-device-verifier-{index:02d}-that-is-long-enough-S256"
+    with postgres_oauth["sessions"]() as db:
+        return oauth_service.create_device_authorization(
+            db,
+            client_id=postgres_oauth["client_id"],
+            scope=protocol.MEMORY_READ_SCOPE,
+            audience=protocol.AUDIENCE,
+            code_challenge=protocol.pkce_s256(verifier),
+            code_challenge_method="S256",
+            issuer="https://oauth-postgres.invalid",
+            context=_context(index),
+        )
+
+
 def _run_concurrently(*functions):
     barrier = threading.Barrier(len(functions))
 
@@ -177,12 +192,55 @@ def test_concurrent_device_exchange_issues_exactly_one_grant(postgres_oauth):
         lambda: _exchange(postgres_oauth),
     )
     assert [outcome for outcome, _result in outcomes].count("success") == 1
-    assert {outcome for outcome, _result in outcomes}.issubset({"success", "expired_token", "invalid_grant"})
+    assert sorted(outcome for outcome, _result in outcomes) == ["invalid_grant", "success"]
     with postgres_oauth["sessions"]() as db:
         assert db.scalar(select(func.count(OAuthGrant.id))) == 1
         assert db.scalar(select(func.count(OAuthRefreshToken.id))) == 1
         device = db.scalar(select(OAuthDeviceAuthorization))
         assert device.status == "exchanged"
+
+
+def test_concurrent_rate_limit_enforces_exact_threshold(postgres_oauth, monkeypatch):
+    monkeypatch.setitem(oauth_service.PUBLIC_RATE_LIMITS, "device_authorization", 1)
+
+    def enforce():
+        with postgres_oauth["sessions"]() as db:
+            oauth_service.enforce_rate_limit(
+                db,
+                "device_authorization",
+                _context(20),
+                client_id=postgres_oauth["client_id"],
+            )
+            db.commit()
+
+    outcomes = _run_concurrently(enforce, enforce)
+    assert [outcome for outcome, _result in outcomes].count("success") == 1
+    assert [outcome for outcome, _result in outcomes].count("temporarily_unavailable") == 1
+    with postgres_oauth["sessions"]() as db:
+        events = db.scalars(
+            select(OAuthAuditEvent).where(OAuthAuditEvent.event_type == "rate_limit.device_authorization")
+        ).all()
+        assert sum(event.outcome == "denied" for event in events) == 1
+
+
+def test_concurrent_outstanding_cap_counts_pending_and_approved(postgres_oauth, monkeypatch):
+    monkeypatch.setattr(oauth_service, "MAX_OUTSTANDING_DEVICE_AUTHORIZATIONS", 2)
+    monkeypatch.setitem(oauth_service.PUBLIC_RATE_LIMITS, "device_authorization", 100)
+    outcomes = _run_concurrently(
+        lambda: _create_device_authorization(postgres_oauth, 30),
+        lambda: _create_device_authorization(postgres_oauth, 31),
+    )
+    assert [outcome for outcome, _result in outcomes].count("success") == 1
+    assert [outcome for outcome, _result in outcomes].count("temporarily_unavailable") == 1
+    with postgres_oauth["sessions"]() as db:
+        outstanding = db.scalars(
+            select(OAuthDeviceAuthorization).where(
+                OAuthDeviceAuthorization.status.in_(("pending", "approved")),
+                OAuthDeviceAuthorization.expires_at > datetime.now(timezone.utc),
+            )
+        ).all()
+        assert len(outstanding) == 2
+        assert {device.status for device in outstanding} == {"pending", "approved"}
 
 
 def test_concurrent_refresh_detects_replay_and_revokes_family(postgres_oauth):

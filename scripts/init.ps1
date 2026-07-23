@@ -99,8 +99,9 @@ foreach ($key in @(
     "POSTGRES_PASSWORD",
     "NEO4J_PASSWORD",
     "JWT_SECRET",
-    "OAUTH_USER_CODE_HMAC_SECRET",
-    "OAUTH_AUDIT_HMAC_SECRET"
+    "OAUTH_DEVICE_CODE_SECRET",
+    "OAUTH_AUDIT_HMAC_SECRET",
+    "OAUTH_PROXY_HMAC_SECRET"
 )) {
     if (Set-MissingSecret $key) {
         $generatedKeys.Add($key)

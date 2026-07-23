@@ -53,6 +53,7 @@ RUN addgroup --system --gid 1001 nodejs && \
 COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+COPY --from=builder --chown=nextjs:nodejs /app/transport-peer.cjs ./transport-peer.cjs
 COPY LICENSE NOTICE THIRD_PARTY_NOTICES.md MODIFICATIONS.md /usr/share/licenses/yiqiao/
 COPY server/dashboard/public/fonts/FONT_LICENSES.md server/dashboard/public/fonts/OFL-1.1.txt /usr/share/licenses/yiqiao/fonts/
 COPY LICENSE /usr/share/licenses/yiqiao/fonts/RobotoMono-Apache-2.0.txt
@@ -80,4 +81,4 @@ HEALTHCHECK --interval=10s --timeout=5s --start-period=30s --retries=6 \
   CMD wget -qO- http://127.0.0.1:3000/api/health >/dev/null || exit 1
 
 ENTRYPOINT ["/home/nextjs/entrypoint.sh"]
-CMD ["node", "server.js"]
+CMD ["node", "--require", "./transport-peer.cjs", "server.js"]

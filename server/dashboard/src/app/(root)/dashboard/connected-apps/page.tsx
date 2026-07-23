@@ -41,6 +41,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/components/ui/use-toast";
+import { useAuth } from "@/hooks/use-auth";
 import { getErrorMessage } from "@/lib/error-message";
 import { useI18n } from "@/lib/i18n";
 import type {
@@ -123,6 +124,7 @@ function StatusBadge({ status }: { status: string }) {
 
 export default function ConnectedAppsPage() {
   const { t, language } = useI18n();
+  const { isAdmin } = useAuth();
   const locale = language === "zh" ? "zh-CN" : "en-US";
   const [userCode, setUserCode] = useState("");
   const [deviceRequest, setDeviceRequest] = useState<OAuthDeviceRequest | null>(
@@ -218,8 +220,8 @@ export default function ConnectedAppsPage() {
 
   useEffect(() => {
     void loadGrants();
-    void loadApplications();
-  }, [loadApplications, loadGrants]);
+    if (isAdmin) void loadApplications();
+  }, [isAdmin, loadApplications, loadGrants]);
 
   useEffect(() => {
     const currentUrl = new URL(window.location.href);
@@ -515,10 +517,20 @@ export default function ConnectedAppsPage() {
 
       <Tabs defaultValue="authorize" className="w-full">
         <div className="overflow-x-auto pb-1">
-          <TabsList className="grid w-full grid-cols-3 sm:w-auto">
+          <TabsList
+            className={
+              isAdmin
+                ? "grid w-full grid-cols-3 sm:w-auto"
+                : "grid w-full grid-cols-2 sm:w-auto"
+            }
+          >
             <TabsTrigger value="authorize">{t("Authorize")}</TabsTrigger>
             <TabsTrigger value="connections">{t("Connections")}</TabsTrigger>
-            <TabsTrigger value="applications">{t("Applications")}</TabsTrigger>
+            {isAdmin && (
+              <TabsTrigger value="applications">
+                {t("Applications")}
+              </TabsTrigger>
+            )}
           </TabsList>
         </div>
 
@@ -830,218 +842,220 @@ export default function ConnectedAppsPage() {
           </section>
         </TabsContent>
 
-        <TabsContent value="applications" className="mt-5 space-y-8">
-          {canRegisterApplication && (
-            <section
-              aria-labelledby="register-application-heading"
-              className="space-y-4"
-            >
-              <div>
-                <h2
-                  id="register-application-heading"
-                  className="text-base font-semibold"
-                >
-                  {t("Register a public application")}
-                </h2>
-                <p className="mt-1 text-sm text-onSurface-default-secondary">
-                  {t(
-                    "Define the audiences and scopes this application may request.",
-                  )}
-                </p>
-              </div>
-              <form
-                onSubmit={registerApplication}
-                className="grid max-w-3xl gap-4 sm:grid-cols-2"
+        {isAdmin && (
+          <TabsContent value="applications" className="mt-5 space-y-8">
+            {canRegisterApplication && (
+              <section
+                aria-labelledby="register-application-heading"
+                className="space-y-4"
               >
-                <div className="space-y-2">
-                  <Label htmlFor="oauth-client-id">{t("Client ID")}</Label>
-                  <Input
-                    id="oauth-client-id"
-                    value={registration.clientId}
-                    onChange={(event) =>
-                      setRegistration((current) => ({
-                        ...current,
-                        clientId: event.target.value,
-                      }))
-                    }
-                    placeholder="my-public-app"
-                    autoComplete="off"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="oauth-display-name">
-                    {t("Display name")}
-                  </Label>
-                  <Input
-                    id="oauth-display-name"
-                    value={registration.displayName}
-                    onChange={(event) =>
-                      setRegistration((current) => ({
-                        ...current,
-                        displayName: event.target.value,
-                      }))
-                    }
-                    placeholder={t("Application name")}
-                    autoComplete="off"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="oauth-audiences">
-                    {t("Allowed audiences")}
-                  </Label>
-                  <Input
-                    id="oauth-audiences"
-                    value="yiqiao:memory-api"
-                    readOnly
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="oauth-scopes">{t("Allowed scopes")}</Label>
-                  <Input
-                    id="oauth-scopes"
-                    value={registration.scopes}
-                    onChange={(event) =>
-                      setRegistration((current) => ({
-                        ...current,
-                        scopes: event.target.value,
-                      }))
-                    }
-                    placeholder="memory:read, memory:write"
-                    autoComplete="off"
-                  />
-                  <p className="text-xs text-onSurface-default-tertiary">
-                    {t("Separate multiple values with commas.")}
+                <div>
+                  <h2
+                    id="register-application-heading"
+                    className="text-base font-semibold"
+                  >
+                    {t("Register a public application")}
+                  </h2>
+                  <p className="mt-1 text-sm text-onSurface-default-secondary">
+                    {t(
+                      "Define the audiences and scopes this application may request.",
+                    )}
                   </p>
                 </div>
-                <div className="sm:col-span-2">
-                  <Button type="submit" disabled={busyAction !== null}>
-                    {busyAction === "register-application" ? (
-                      <Loader2 className="size-4 animate-spin" />
-                    ) : (
-                      <Plus className="size-4" />
-                    )}
-                    {t("Register application")}
-                  </Button>
-                </div>
-              </form>
-            </section>
-          )}
-
-          <section
-            aria-labelledby="registered-applications-heading"
-            className="space-y-3"
-          >
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <AppWindow className="size-4" />
-                <h3
-                  id="registered-applications-heading"
-                  className="font-semibold"
+                <form
+                  onSubmit={registerApplication}
+                  className="grid max-w-3xl gap-4 sm:grid-cols-2"
                 >
-                  {t("Registered applications")}
-                </h3>
-              </div>
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                disabled={applicationsLoading}
-                onClick={() => void loadApplications()}
-                aria-label={t("Refresh applications")}
-                title={t("Refresh applications")}
-              >
-                <RefreshCw
-                  className={`size-4 ${applicationsLoading ? "animate-spin" : ""}`}
-                />
-              </Button>
-            </div>
-            {applicationsError ? (
-              <p
-                role="alert"
-                className="rounded-md border border-memBorder-primary bg-surface-default-secondary p-3 text-sm text-onSurface-default-secondary"
-              >
-                {applicationsError}
-              </p>
-            ) : applicationsLoading && applications.length === 0 ? (
-              <div className="flex min-h-32 items-center justify-center text-sm text-onSurface-default-secondary">
-                <Loader2 className="mr-2 size-4 animate-spin" />
-                {t("Loading applications...")}
-              </div>
-            ) : applications.length > 0 ? (
-              <div className="grid gap-3 lg:grid-cols-2">
-                {applications.map((application) => (
-                  <Card key={application.client_id}>
-                    <CardHeader className="flex-row items-start justify-between gap-3 space-y-0">
-                      <div className="min-w-0">
-                        <CardTitle className="truncate text-base">
-                          {application.display_name}
-                        </CardTitle>
-                        <p className="mt-1 break-all font-mono text-xs text-onSurface-default-tertiary">
-                          {application.client_id}
-                        </p>
-                      </div>
-                      <StatusBadge status={application.status} />
-                    </CardHeader>
-                    <CardContent className="space-y-4 text-sm">
-                      <div>
-                        <p className="text-onSurface-default-tertiary">
-                          {t("Allowed audiences")}
-                        </p>
-                        <p className="mt-1 break-all font-mono text-xs">
-                          {application.allowed_audiences.join(", ")}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-onSurface-default-tertiary">
-                          {t("Allowed scopes")}
-                        </p>
-                        <div className="mt-2 flex flex-wrap gap-1.5">
-                          {application.allowed_scopes.map((scope) => (
-                            <Badge
-                              key={scope}
-                              variant="secondary"
-                              className="font-mono font-normal"
-                            >
-                              {scope}
-                            </Badge>
-                          ))}
-                        </div>
-                      </div>
-                      {application.status !== "revoked" && (
-                        <Button
-                          type="button"
-                          variant="destructive"
-                          size="sm"
-                          disabled={busyAction !== null}
-                          onClick={() =>
-                            setConfirmation({
-                              title: t("Revoke application?"),
-                              description: t(
-                                "New authorization requests from this application will be blocked.",
-                              ),
-                              actionLabel: t("Revoke application"),
-                              run: () =>
-                                revokeRegisteredApplication(
-                                  application.client_id,
-                                ),
-                            })
-                          }
-                        >
-                          <Unplug className="size-4" />
-                          {t("Revoke application")}
-                        </Button>
+                  <div className="space-y-2">
+                    <Label htmlFor="oauth-client-id">{t("Client ID")}</Label>
+                    <Input
+                      id="oauth-client-id"
+                      value={registration.clientId}
+                      onChange={(event) =>
+                        setRegistration((current) => ({
+                          ...current,
+                          clientId: event.target.value,
+                        }))
+                      }
+                      placeholder="my-public-app"
+                      autoComplete="off"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="oauth-display-name">
+                      {t("Display name")}
+                    </Label>
+                    <Input
+                      id="oauth-display-name"
+                      value={registration.displayName}
+                      onChange={(event) =>
+                        setRegistration((current) => ({
+                          ...current,
+                          displayName: event.target.value,
+                        }))
+                      }
+                      placeholder={t("Application name")}
+                      autoComplete="off"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="oauth-audiences">
+                      {t("Allowed audiences")}
+                    </Label>
+                    <Input
+                      id="oauth-audiences"
+                      value="yiqiao:memory-api"
+                      readOnly
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="oauth-scopes">{t("Allowed scopes")}</Label>
+                    <Input
+                      id="oauth-scopes"
+                      value={registration.scopes}
+                      onChange={(event) =>
+                        setRegistration((current) => ({
+                          ...current,
+                          scopes: event.target.value,
+                        }))
+                      }
+                      placeholder="memory:read, memory:write"
+                      autoComplete="off"
+                    />
+                    <p className="text-xs text-onSurface-default-tertiary">
+                      {t("Separate multiple values with commas.")}
+                    </p>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <Button type="submit" disabled={busyAction !== null}>
+                      {busyAction === "register-application" ? (
+                        <Loader2 className="size-4 animate-spin" />
+                      ) : (
+                        <Plus className="size-4" />
                       )}
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            ) : (
-              <p className="rounded-md border border-dashed border-memBorder-secondary p-6 text-sm text-onSurface-default-secondary">
-                {t("No applications registered.")}
-              </p>
+                      {t("Register application")}
+                    </Button>
+                  </div>
+                </form>
+              </section>
             )}
-          </section>
-        </TabsContent>
+
+            <section
+              aria-labelledby="registered-applications-heading"
+              className="space-y-3"
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <AppWindow className="size-4" />
+                  <h3
+                    id="registered-applications-heading"
+                    className="font-semibold"
+                  >
+                    {t("Registered applications")}
+                  </h3>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  disabled={applicationsLoading}
+                  onClick={() => void loadApplications()}
+                  aria-label={t("Refresh applications")}
+                  title={t("Refresh applications")}
+                >
+                  <RefreshCw
+                    className={`size-4 ${applicationsLoading ? "animate-spin" : ""}`}
+                  />
+                </Button>
+              </div>
+              {applicationsError ? (
+                <p
+                  role="alert"
+                  className="rounded-md border border-memBorder-primary bg-surface-default-secondary p-3 text-sm text-onSurface-default-secondary"
+                >
+                  {applicationsError}
+                </p>
+              ) : applicationsLoading && applications.length === 0 ? (
+                <div className="flex min-h-32 items-center justify-center text-sm text-onSurface-default-secondary">
+                  <Loader2 className="mr-2 size-4 animate-spin" />
+                  {t("Loading applications...")}
+                </div>
+              ) : applications.length > 0 ? (
+                <div className="grid gap-3 lg:grid-cols-2">
+                  {applications.map((application) => (
+                    <Card key={application.client_id}>
+                      <CardHeader className="flex-row items-start justify-between gap-3 space-y-0">
+                        <div className="min-w-0">
+                          <CardTitle className="truncate text-base">
+                            {application.display_name}
+                          </CardTitle>
+                          <p className="mt-1 break-all font-mono text-xs text-onSurface-default-tertiary">
+                            {application.client_id}
+                          </p>
+                        </div>
+                        <StatusBadge status={application.status} />
+                      </CardHeader>
+                      <CardContent className="space-y-4 text-sm">
+                        <div>
+                          <p className="text-onSurface-default-tertiary">
+                            {t("Allowed audiences")}
+                          </p>
+                          <p className="mt-1 break-all font-mono text-xs">
+                            {application.allowed_audiences.join(", ")}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-onSurface-default-tertiary">
+                            {t("Allowed scopes")}
+                          </p>
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            {application.allowed_scopes.map((scope) => (
+                              <Badge
+                                key={scope}
+                                variant="secondary"
+                                className="font-mono font-normal"
+                              >
+                                {scope}
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+                        {application.status !== "revoked" && (
+                          <Button
+                            type="button"
+                            variant="destructive"
+                            size="sm"
+                            disabled={busyAction !== null}
+                            onClick={() =>
+                              setConfirmation({
+                                title: t("Revoke application?"),
+                                description: t(
+                                  "New authorization requests from this application will be blocked.",
+                                ),
+                                actionLabel: t("Revoke application"),
+                                run: () =>
+                                  revokeRegisteredApplication(
+                                    application.client_id,
+                                  ),
+                              })
+                            }
+                          >
+                            <Unplug className="size-4" />
+                            {t("Revoke application")}
+                          </Button>
+                        )}
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              ) : (
+                <p className="rounded-md border border-dashed border-memBorder-secondary p-6 text-sm text-onSurface-default-secondary">
+                  {t("No applications registered.")}
+                </p>
+              )}
+            </section>
+          </TabsContent>
+        )}
       </Tabs>
 
       <AlertDialog

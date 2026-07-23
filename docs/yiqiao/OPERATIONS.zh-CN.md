@@ -40,7 +40,8 @@ powershell -ExecutionPolicy Bypass -File .\scripts\init.ps1
 
 脚本会在需要时将 `server/.env.example` 复制为 `server/.env`，生成
 `POSTGRES_PASSWORD`、`NEO4J_PASSWORD`、`JWT_SECRET`、
-`OAUTH_USER_CODE_HMAC_SECRET` 和 `OAUTH_AUDIT_HMAC_SECRET`，创建
+`OAUTH_DEVICE_CODE_SECRET`、`OAUTH_AUDIT_HMAC_SECRET` 和
+`OAUTH_PROXY_HMAC_SECRET`，创建
 `server/history`，并验证 Compose 配置。脚本会保留非空密钥，不会替换已经存在的环境文件。
 
 请将 `server/.env` 视为密钥。不要提交该文件、将其附在 Issue 中，或把未加密副本
@@ -116,6 +117,10 @@ PostgreSQL 和 Neo4j 不映射主机端口，只连接内部后端网络。控�
 HTTPS 来源。发现、OAuth、连接器健康检查和公布的记忆路径都应通过该来源路由，同时
 保持 API 内部来源私有。完整的信任、令牌、清理和审计契约见
 [公共连接器](PUBLIC_CONNECTOR.zh-CN.md)。
+
+除非控制台只有一个入口网关、该网关把 `X-Forwarded-For` 替换为恰好一个经过验证的
+客户端 IP，并实施等价的逐 IP 限流，否则应保持
+`OAUTH_GATEWAY_RATE_LIMIT_CONFIRMED=false`。透传或追加式转发头不满足该信任边界。
 
 ## 应用镜像
 
@@ -249,8 +254,9 @@ docker compose -p "$PROJECT" up -d
 运行代码块前，将加密密钥备份中的必要值选择性合并到替代部署的 `.env`。保留新生成
 的 `POSTGRES_PASSWORD`，因为该凭据属于替代 PostgreSQL 集群。恢复 Neo4j 快照
 所需的源 `NEO4J_USERNAME` 和 `NEO4J_PASSWORD`，以及源 `JWT_SECRET`、
-`OAUTH_USER_CODE_HMAC_SECRET`、`OAUTH_AUDIT_HMAC_SECRET` 和所有必需的服务商
-密钥。不要整体复制旧 `.env`，也不要替换恢复检出目录的绑定地址和路径。
+`OAUTH_DEVICE_CODE_SECRET`、`OAUTH_AUDIT_HMAC_SECRET`、
+`OAUTH_PROXY_HMAC_SECRET` 和所有必需的服务商密钥。不要整体复制旧 `.env`，
+也不要替换恢复检出目录的绑定地址和路径。
 必须在 `create neo4j` 捕获环境之前完成合并。并行恢复时，将 `ACTIVE_SERVER_DIR`
 设置为在线检出目录。只有在另一台主机上恢复且当前检出目录和卷不可能存在时，才可将
 其设置为空字符串；所有恢复目标的空状态和身份检查仍然必须执行。

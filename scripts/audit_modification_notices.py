@@ -151,9 +151,11 @@ server/dashboard/src/lib/i18n.test.ts
 server/dashboard/src/lib/language-preference.ts
 server/dashboard/src/lib/public-connector-proxy.test.ts
 server/dashboard/src/lib/public-connector-proxy.ts
+server/dashboard/src/lib/transport-peer.test.ts
 server/dashboard/src/lib/yiqiao-api-examples.test.ts
 server/dashboard/src/lib/yiqiao-api-examples.ts
 server/dashboard/src/middleware.test.ts
+server/dashboard/transport-peer.cjs
 server/dashboard/vitest.config.ts
 server/docker-compose.build.yaml
 server/docker-compose.e2e.yaml
@@ -602,6 +604,8 @@ def _manifest_for_write(path: Path, expected: bytes) -> bytes:
 
 def manifest_content(paths: list[Path]) -> bytes:
     path_digest = hashlib.sha256("\n".join(path.as_posix() for path in paths).encode()).hexdigest()
+    originated_paths = sorted(YIQIAO_ORIGINATED_PATHS)
+    originated_digest = hashlib.sha256("\n".join(originated_paths).encode()).hexdigest()
     labels = {
         "css": "CSS comment",
         "hash": "source comment",
@@ -636,6 +640,10 @@ def manifest_content(paths: list[Path]) -> bytes:
         f"Modified upstream files: **{len(paths)}**",
         "",
         f"Path-list SHA-256: `{path_digest.upper()}`",
+        "",
+        f"YiQiao-originated files: **{len(originated_paths)}**",
+        "",
+        f"Originated path-list SHA-256: `{originated_digest.upper()}`",
         "",
         "## Files",
         "",

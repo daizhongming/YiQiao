@@ -1,4 +1,5 @@
 import binascii
+import hashlib
 import json
 import struct
 import subprocess
@@ -197,6 +198,15 @@ def test_manifest_comparison_and_write_preserve_line_endings(tmp_path):
     manifest = tmp_path / "MODIFICATIONS.md"
     manifest.write_bytes(crlf)
     assert notices._manifest_for_write(manifest, expected) == crlf
+
+
+def test_manifest_records_the_reviewed_originated_path_inventory():
+    content = notices.manifest_content([]).decode("utf-8")
+    originated_paths = sorted(notices.YIQIAO_ORIGINATED_PATHS)
+    digest = hashlib.sha256("\n".join(originated_paths).encode()).hexdigest().upper()
+
+    assert f"YiQiao-originated files: **{len(originated_paths)}**" in content
+    assert f"Originated path-list SHA-256: `{digest}`" in content
 
 
 def test_png_conflicting_notice_is_rejected(tmp_path):

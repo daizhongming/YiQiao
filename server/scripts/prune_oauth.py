@@ -85,8 +85,8 @@ def prune_oauth(
         raise ValueError(f"batch_size must be between 1 and {MAX_BATCH_SIZE}")
     if audit_retention_days < 1:
         raise ValueError("audit_retention_days must be >= 1")
-    if refresh_replay_grace_seconds < 0:
-        raise ValueError("refresh_replay_grace_seconds must be >= 0")
+    if refresh_replay_grace_seconds < 1:
+        raise ValueError("refresh_replay_grace_seconds must be >= 1")
 
     now = now or datetime.now(timezone.utc)
     grant_cutoff = now - timedelta(seconds=refresh_replay_grace_seconds)
@@ -149,7 +149,7 @@ def main() -> int:
             os.environ,
             "OAUTH_REFRESH_REPLAY_GRACE_SECONDS",
             DEFAULT_REFRESH_REPLAY_GRACE_SECONDS,
-            minimum=0,
+            minimum=1,
         )
     except ValueError as exc:
         sys.stderr.write(f"{exc}.\n")

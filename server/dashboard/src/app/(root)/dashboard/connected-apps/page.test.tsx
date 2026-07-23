@@ -4,6 +4,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -14,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   apiGet: vi.fn(),
   apiPost: vi.fn(),
   getActiveProjectId: vi.fn(),
+  useAuth: vi.fn(),
   toast: vi.fn(),
   translate: (value: string) => value,
 }));
@@ -28,6 +30,10 @@ vi.mock("@/utils/api", () => ({
 
 vi.mock("@/lib/i18n", () => ({
   useI18n: () => ({ t: mocks.translate, language: "en" }),
+}));
+
+vi.mock("@/hooks/use-auth", () => ({
+  useAuth: mocks.useAuth,
 }));
 
 vi.mock("@/components/ui/use-toast", () => ({
@@ -76,21 +82,75 @@ function grant() {
   };
 }
 
+function application() {
+  return {
+    client_id: "registered-public-app",
+    display_name: "Registered Public App",
+    client_type: "public" as const,
+    allowed_audiences: ["yiqiao:memory-api"],
+    allowed_scopes: ["memory:read", "memory:write"],
+    operator_metadata: {},
+    status: "active",
+    created_at: "2026-07-22T09:00:00Z",
+    updated_at: "2026-07-22T09:00:00Z",
+    last_used_at: null,
+    revoked_at: null,
+  };
+}
+
+function auditEvent() {
+  return {
+    id: "audit-123",
+    event_type: "grant_revoked",
+    outcome: "success",
+    client_id: "audit-public-app",
+    application_name: "Audit Public App",
+    grant_id: "grant-123",
+    project_id: "active-project",
+    metadata: {},
+    created_at: "2026-07-22T09:30:00Z",
+  };
+}
+
 const emptyGrantResponse = {
   items: [],
   audit_events: [],
   can_manage_project: false,
 };
 
-function configureGet(grantItems: ReturnType<typeof grant>[] = []) {
+type ConfigureGetOptions = {
+  grantItems?: ReturnType<typeof grant>[];
+  applications?: ReturnType<typeof application>[];
+  auditEvents?: ReturnType<typeof auditEvent>[];
+  canManageProject?: boolean;
+  canRegister?: boolean;
+  isAdmin?: boolean;
+};
+
+function configureGet({
+  grantItems = [],
+  applications = [],
+  auditEvents = [],
+  canManageProject = false,
+  canRegister = true,
+  isAdmin = true,
+}: ConfigureGetOptions = {}) {
+  mocks.useAuth.mockReturnValue({ isAdmin });
   mocks.apiGet.mockImplementation((url: string) => {
     if (url === OAUTH_ENDPOINTS.GRANTS) {
       return Promise.resolve({
-        data: { ...emptyGrantResponse, items: grantItems },
+        data: {
+          ...emptyGrantResponse,
+          items: grantItems,
+          audit_events: auditEvents,
+          can_manage_project: canManageProject,
+        },
       });
     }
     if (url === OAUTH_ENDPOINTS.APPLICATIONS) {
-      return Promise.resolve({ data: { items: [], can_register: true } });
+      return Promise.resolve({
+        data: { items: applications, can_register: canRegister },
+      });
     }
     return Promise.reject(new Error(`Unexpected GET ${url}`));
   });
@@ -116,6 +176,7 @@ beforeEach(() => {
   mocks.apiGet.mockReset();
   mocks.apiPost.mockReset();
   mocks.getActiveProjectId.mockReset().mockReturnValue("active-project");
+  mocks.useAuth.mockReset();
   mocks.toast.mockReset();
   configureGet();
 });
@@ -198,7 +259,7 @@ describe("ConnectedAppsPage", () => {
   });
 
   it("revokes an individual grant", async () => {
-    configureGet([grant()]);
+    configureGet({ grantItems: [grant()] });
     mocks.apiPost.mockResolvedValue({ data: {} });
     render(<ConnectedAppsPage />);
 
@@ -213,6 +274,83 @@ describe("ConnectedAppsPage", () => {
         OAUTH_ENDPOINTS.GRANT_REVOKE("grant-123"),
       ),
     );
+  });
+
+  it("revokes every personal grant for an application", async () => {
+    configureGet({ grantItems: [grant()] });
+    mocks.apiPost.mockResolvedValue({ data: {} });
+    render(<ConnectedAppsPage />);
+
+    activateTab("Connections");
+    fireEvent.click(await screen.findByRole("button", { name: "Revoke all" }));
+    const dialog = await screen.findByRole("alertdialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Revoke all" }));
+
+    await waitFor(() =>
+      expect(mocks.apiPost).toHaveBeenCalledWith(
+        OAUTH_ENDPOINTS.GRANTS_REVOKE_BY_APPLICATION,
+        { client_id: "example-public-app" },
+      ),
+    );
+  });
+
+  it("revokes a registered application", async () => {
+    configureGet({ applications: [application()] });
+    mocks.apiPost.mockResolvedValue({ data: {} });
+    render(<ConnectedAppsPage />);
+
+    activateTab("Applications");
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Revoke application" }),
+    );
+    const dialog = await screen.findByRole("alertdialog");
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: "Revoke application" }),
+    );
+
+    await waitFor(() =>
+      expect(mocks.apiPost).toHaveBeenCalledWith(
+        OAUTH_ENDPOINTS.APPLICATION_REVOKE("registered-public-app"),
+      ),
+    );
+  });
+
+  it("renders recent OAuth audit activity", async () => {
+    configureGet({ auditEvents: [auditEvent()] });
+    render(<ConnectedAppsPage />);
+
+    activateTab("Connections");
+
+    expect(await screen.findByText("grant_revoked")).toBeTruthy();
+    expect(screen.getByText("Audit Public App")).toBeTruthy();
+    expect(screen.getByText("audit-public-app")).toBeTruthy();
+    expect(screen.getByText("success")).toBeTruthy();
+  });
+
+  it("does not expose or load the application registry for members", async () => {
+    configureGet({ isAdmin: false });
+    render(<ConnectedAppsPage />);
+
+    await waitFor(() =>
+      expect(mocks.apiGet).toHaveBeenCalledWith(OAUTH_ENDPOINTS.GRANTS),
+    );
+    expect(screen.queryByRole("tab", { name: "Applications" })).toBeNull();
+    expect(screen.queryByText("Registered applications")).toBeNull();
+    expect(mocks.apiGet).not.toHaveBeenCalledWith(OAUTH_ENDPOINTS.APPLICATIONS);
+  });
+
+  it("shows application registry controls to admins", async () => {
+    render(<ConnectedAppsPage />);
+
+    activateTab("Applications");
+
+    expect(
+      await screen.findByRole("heading", {
+        name: "Register a public application",
+      }),
+    ).toBeTruthy();
+    expect(screen.getByText("Registered applications")).toBeTruthy();
+    expect(mocks.apiGet).toHaveBeenCalledWith(OAUTH_ENDPOINTS.APPLICATIONS);
   });
 
   it("registers a public application with normalized lists", async () => {

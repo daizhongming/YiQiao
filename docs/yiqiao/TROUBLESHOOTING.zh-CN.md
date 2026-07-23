@@ -140,6 +140,61 @@ docker compose exec \
 - 确认密钥尚未撤销，并且属于目标项目。
 - 控制面设置必须使用管理员会话，不能使用项目密钥。
 
+## 公共连接器发现或设备流程失败
+
+先向配置的签发者发起只读请求；不要针对无关的在线部署进行测试：
+
+```bash
+curl --fail-with-body "$ISSUER/.well-known/oauth-authorization-server"
+curl --fail-with-body "$ISSUER/.well-known/service-capabilities"
+curl --fail-with-body "$ISSUER/api/health"
+```
+
+每个公布的 URL 都必须使用完全一致且可信的 `OAUTH_ISSUER` 来源。生产环境必须使用
+HTTPS，并且必须等于 `PUBLIC_DASHBOARD_URL`。公共进程健康路由是 `/api/health`；
+`/v1/ping/` 有意要求认证，不能替代进程健康检查。
+
+如果经过控制台的连接器请求在到达 API 前失败，请确认控制台与 API 使用相同且非空的
+`OAUTH_PROXY_HMAC_SECRET`，然后只重新创建这两个应用容器。绝不要输出该密钥或已签名
+请求头。除非唯一入口网关把 `X-Forwarded-For` 替换为恰好一个经过验证的客户端 IP，
+并实施等价的逐 IP 限流，否则应保持 `OAUTH_GATEWAY_RATE_LIMIT_CONFIRMED=false`；
+透传或追加式代理不可信。
+
+- `invalid_client`：确认公开客户端已预先登记、处于启用状态，并使用完全一致的
+  `client_id`。
+- `invalid_scope` 或 `invalid_target`：对照应用登记和能力文档检查请求的作用域与受众。
+- `invalid_grant`：设备代码已过期或使用过、或者 PKCE verifier 不匹配时，丢弃该请求并
+  重新开始设备流程；不得记录这两个值。
+- `authorization_pending`：只保留一个轮询器，并遵守公布的间隔。遇到 `slow_down` 时
+  增加间隔；遇到 `429` 时停止请求并遵守 `Retry-After`。
+- `access_denied` 或 `expired_token`：重新发起设备请求，不要反复兑换旧代码。
+
+令牌端点只支持设备代码兑换和刷新。客户端凭据授权与 RFC 8693 令牌交换按设计返回不支持
+的授权类型错误。本版本没有 MCP Streamable HTTP 端点，因为它仍只是 ADR 评估项；不能
+用它绕过 OAuth 或项目隔离。
+
+从已退役的旧配对升级后，待处理配对请求会丢失，旧连接需要按需登记并通过设备流程重新
+授权。降级无法恢复这些状态或逆转撤销操作；需要数据回滚时，应按照[迁移指南](MIGRATION.zh-CN.md)
+恢复经过验证的升级前备份。
+
+## OAuth 令牌或受保护资源返回错误
+
+- `401 invalid_token` 通常表示令牌已过期、已撤销、格式错误、属于已停用应用，或者其
+  授权不再有效。应重新授权，不要编辑持久化状态。
+- `403 insufficient_scope`、`invalid_target` 或 `project_scope_mismatch` 表示路由、受众、
+  作用域或项目与授权不匹配。删除冲突的 `X-Project-ID`、查询参数 `project_id`、记忆
+  元数据项目或搜索过滤器项目；调用方不能覆盖令牌绑定的项目。
+- 用户角色变化、项目成员资格移除或项目删除会在下一个请求立即生效。重新授权无法恢复
+  用户已经失去的访问权。
+- 重复使用已轮换的刷新令牌会撤销整个令牌族。停止所有并发刷新写入方，丢弃该令牌族，
+  并重新完成设备流程。
+- RFC 7009 撤销是幂等的，因此成功的空响应不能证明所提供令牌曾经存在。应在“已连接
+  应用”中确认目标授权已不存在，并验证后续资源访问被拒绝。
+
+诊断这些失败时，只使用关联标识和经过脱敏的 OAuth 审计事件。绝不要收集原始
+Authorization 请求头、表单请求体、设备代码或用户代码、PKCE verifier、令牌、令牌
+哈希或数据库记录。
+
 ## 无法连接模型提供商
 
 在“配置”页面分别运行 LLM 和嵌入模型的连接测试。检查提供商名称、模型、基础 URL、API 密钥权限范围、

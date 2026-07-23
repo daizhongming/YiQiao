@@ -41,7 +41,8 @@ powershell -ExecutionPolicy Bypass -File .\scripts\init.ps1
 
 The script copies `server/.env.example` to `server/.env` when needed, generates
 `POSTGRES_PASSWORD`, `NEO4J_PASSWORD`, `JWT_SECRET`,
-`OAUTH_USER_CODE_HMAC_SECRET`, and `OAUTH_AUDIT_HMAC_SECRET`, creates
+`OAUTH_DEVICE_CODE_SECRET`, `OAUTH_AUDIT_HMAC_SECRET`, and
+`OAUTH_PROXY_HMAC_SECRET`, creates
 `server/history`, and validates Compose. It preserves non-empty secrets and
 does not replace an existing environment file.
 
@@ -120,6 +121,11 @@ Public connector deployments must set `OAUTH_ISSUER` and
 OAuth, connector health, and the advertised memory paths through that origin;
 keep the API's internal origin private. See [Public Connector](PUBLIC_CONNECTOR.md)
 for the complete trust, token, cleanup, and audit contract.
+
+Keep `OAUTH_GATEWAY_RATE_LIMIT_CONFIRMED=false` unless the Dashboard has exactly
+one ingress gateway, that gateway replaces `X-Forwarded-For` with exactly one
+validated client IP, and it applies equivalent per-IP limits. Pass-through or
+append-only forwarding headers do not satisfy this trust boundary.
 
 ## Application Images
 
@@ -269,9 +275,10 @@ Before running the block, selectively merge the encrypted secret backup into the
 replacement `.env`. Keep the newly initialized `POSTGRES_PASSWORD`, because the
 replacement PostgreSQL cluster owns that credential. Restore the source
 `NEO4J_USERNAME` and `NEO4J_PASSWORD` required by the Neo4j snapshot, plus the
-source `JWT_SECRET`, `OAUTH_USER_CODE_HMAC_SECRET`,
-`OAUTH_AUDIT_HMAC_SECRET`, and any required provider secrets. Do not copy the
-old `.env` wholesale or replace the restore checkout's bind addresses and paths.
+source `JWT_SECRET`, `OAUTH_DEVICE_CODE_SECRET`,
+`OAUTH_AUDIT_HMAC_SECRET`, `OAUTH_PROXY_HMAC_SECRET`, and any required provider
+secrets. Do not copy the old `.env` wholesale or replace the restore checkout's
+bind addresses and paths.
 Complete this merge before `create neo4j` captures its environment. For a
 side-by-side restore, set `ACTIVE_SERVER_DIR` to the live checkout. Set it to an
 empty string only when restoring on a separate host where the active checkout

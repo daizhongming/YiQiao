@@ -10,8 +10,9 @@
 
 请从仓库根目录运行初始化脚本。脚本会复制 `server/.env.example`，分别生成
 `POSTGRES_PASSWORD`、`NEO4J_PASSWORD` 和 `JWT_SECRET`，并保留已经存在的
-`.env`。脚本还会分别生成 `OAUTH_USER_CODE_HMAC_SECRET` 与
-`OAUTH_AUDIT_HMAC_SECRET`。服务商凭据通过浏览器配置，不会阻止容器启动。
+`.env`。脚本还会分别生成 `OAUTH_DEVICE_CODE_SECRET` 与
+`OAUTH_AUDIT_HMAC_SECRET`、`OAUTH_PROXY_HMAC_SECRET`。服务商凭据通过浏览器配置，
+不会阻止容器启动。
 
 Linux 和 macOS：
 
@@ -56,7 +57,14 @@ docker compose -f docker-compose.yaml -f docker-compose.build.yaml up -d --build
 TLS 反向代理或私有网络。
 使用公共连接器时，应将 `OAUTH_ISSUER` 与 `PUBLIC_DASHBOARD_URL` 设置为同一个外部
 HTTPS 来源。签发者通过控制台代理路由公开带 PKCE 的通用 OAuth 设备流程，并签发绑定
-项目的短期 Bearer 令牌；API 与数据库仍是私有来源。
+项目的短期 Bearer 令牌；API 与数据库仍是私有来源。使用 HTTP 回环地址测试连接器时还
+必须设置 `OAUTH_ALLOW_INSECURE_LOOPBACK=true`；生产环境绝不能启用此标志。
+控制台会先签名连接器的传输层对端身份，再代理到 API。仅当唯一入口网关把
+`X-Forwarded-For` 覆盖为一个已验证的客户端 IP 时，才可设置
+`OAUTH_GATEWAY_RATE_LIMIT_CONFIRMED=true`；否则以控制台套接字对端为准。
+
+本连接器版本只支持用户参与的设备授权与刷新，不实现客户端凭据授权、RFC 8693 令牌
+交换或 MCP Streamable HTTP 端点。MCP 仍只是 ADR 评估项，不能绕过 OAuth 或项目隔离。
 
 持久化的应用数据、向量数据和导出记录保存在 `postgres_db` 卷中，图数据保存在
 `neo4j_data` 卷中，记忆历史 SQLite 数据库和导入工作区位于 `server/history/`。

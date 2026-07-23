@@ -11,6 +11,7 @@ import json
 import math
 import os
 import re
+import time
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -30,7 +31,6 @@ from connector_protocol import (
     REFRESH_TOKEN_TTL_SECONDS,
     SERVICE_ID,
     SUPPORTED_SCOPES,
-    credential_prefix,
     generate_opaque_token,
     generate_user_code,
     hash_opaque_value,
@@ -72,13 +72,36 @@ PUBLIC_RATE_LIMITS = {
     "token": 120,
     "revocation": 120,
     "device_lookup": 30,
+    "device_approval": 30,
+    "device_rejection": 30,
+    "application_registration": 10,
 }
+MAX_OUTSTANDING_DEVICE_AUTHORIZATIONS = 10
 
 _CLIENT_ID_RE = re.compile(r"^[A-Za-z0-9._~-]{3,128}$")
 _PKCE_CHALLENGE_RE = re.compile(r"^[A-Za-z0-9_-]{43}$")
-_SAFE_ERROR_RE = re.compile(r"^[a-z_]+$")
+_ALLOWED_OAUTH_ERRORS = frozenset(
+    {
+        "access_denied",
+        "authorization_pending",
+        "expired_token",
+        "invalid_client",
+        "invalid_grant",
+        "invalid_request",
+        "invalid_scope",
+        "invalid_target",
+        "slow_down",
+        "temporarily_unavailable",
+        "unsupported_grant_type",
+    }
+)
 _METADATA_KEY_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
 _SENSITIVE_METADATA_KEYS = {"authorization", "credential", "password", "secret", "token"}
+_TRUE_VALUES = {"1", "true", "yes", "on"}
+_PROXY_CLIENT_IP_HEADER = "x-yiqiao-proxy-client-ip"
+_PROXY_TIMESTAMP_HEADER = "x-yiqiao-proxy-timestamp"
+_PROXY_SIGNATURE_HEADER = "x-yiqiao-proxy-signature"
+_PROXY_CONTEXT_MAX_AGE_SECONDS = 30
 
 
 class OAuthProtocolError(Exception):
@@ -91,7 +114,7 @@ class OAuthProtocolError(Exception):
         headers: dict[str, str] | None = None,
     ) -> None:
         super().__init__(description)
-        if not _SAFE_ERROR_RE.fullmatch(error):
+        if error not in _ALLOWED_OAUTH_ERRORS:
             raise ValueError("OAuth error codes must be allowlisted identifiers")
         self.error = error
         self.description = description[:240]
@@ -142,8 +165,47 @@ def _context_digest(kind: str, value: str) -> str:
     return hmac.new(key, f"{kind}:{value}".encode("utf-8"), hashlib.sha256).hexdigest()
 
 
+def _signed_proxy_remote_ip(request: Request) -> str | None:
+    header_names = (
+        _PROXY_CLIENT_IP_HEADER,
+        _PROXY_TIMESTAMP_HEADER,
+        _PROXY_SIGNATURE_HEADER,
+    )
+    values = {name: request.headers.getlist(name) for name in header_names}
+    if not any(values.values()):
+        return None
+    if any(len(items) != 1 or not items[0].strip() for items in values.values()):
+        raise OAuthProtocolError("invalid_request", "The connector proxy context is invalid.")
+
+    remote_ip = values[_PROXY_CLIENT_IP_HEADER][0].strip()
+    timestamp_text = values[_PROXY_TIMESTAMP_HEADER][0].strip()
+    signature = values[_PROXY_SIGNATURE_HEADER][0].strip().lower()
+    try:
+        normalized_ip = str(ipaddress.ip_address(remote_ip))
+        timestamp = int(timestamp_text)
+    except (TypeError, ValueError) as exc:
+        raise OAuthProtocolError("invalid_request", "The connector proxy context is invalid.") from exc
+
+    now = int(time.time())
+    if timestamp > now + 5 or now - timestamp > _PROXY_CONTEXT_MAX_AGE_SECONDS:
+        raise OAuthProtocolError("invalid_request", "The connector proxy context has expired.")
+    if not re.fullmatch(r"[0-9a-f]{64}", signature):
+        raise OAuthProtocolError("invalid_request", "The connector proxy context is invalid.")
+
+    path_and_query = request.url.path
+    if request.url.query:
+        path_and_query = f"{path_and_query}?{request.url.query}"
+    payload = f"v1\n{timestamp_text}\n{request.method.upper()}\n{path_and_query}\n{remote_ip}".encode()
+    expected = hmac.new(_required_secret("OAUTH_PROXY_HMAC_SECRET"), payload, hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(signature, expected):
+        raise OAuthProtocolError("invalid_request", "The connector proxy context is invalid.")
+    return normalized_ip
+
+
 def audit_context(request: Request) -> AuditContext:
-    remote_ip = request.client.host if request.client else ""
+    remote_ip = _signed_proxy_remote_ip(request)
+    if remote_ip is None:
+        remote_ip = request.client.host if request.client else ""
     user_agent = request.headers.get("user-agent", "")
     return AuditContext(
         request_id=request_id_var.get()[:64] or None,
@@ -153,7 +215,11 @@ def audit_context(request: Request) -> AuditContext:
 
 
 def _user_code_secret() -> bytes:
-    return _required_secret("OAUTH_USER_CODE_HMAC_SECRET")
+    return _required_secret("OAUTH_DEVICE_CODE_SECRET")
+
+
+def _insecure_loopback_allowed() -> bool:
+    return os.environ.get("OAUTH_ALLOW_INSECURE_LOOPBACK", "").strip().lower() in _TRUE_VALUES
 
 
 def _is_loopback(hostname: str | None) -> bool:
@@ -167,7 +233,7 @@ def _is_loopback(hostname: str | None) -> bool:
         return False
 
 
-def _validated_issuer(value: str) -> str:
+def _validated_issuer(value: str, *, allow_insecure_loopback: bool = False) -> str:
     parsed = urlsplit(value)
     if (
         parsed.scheme not in {"http", "https"}
@@ -179,8 +245,8 @@ def _validated_issuer(value: str) -> str:
         or parsed.path not in {"", "/"}
     ):
         raise RuntimeError("OAUTH_ISSUER must be an origin URL without credentials, path, query, or fragment.")
-    if parsed.scheme != "https" and not _is_loopback(parsed.hostname):
-        raise RuntimeError("OAUTH_ISSUER must use HTTPS except for loopback development.")
+    if parsed.scheme != "https" and not (allow_insecure_loopback and _is_loopback(parsed.hostname)):
+        raise RuntimeError("OAUTH_ISSUER must use HTTPS unless explicit local loopback development is enabled.")
     try:
         port = parsed.port
     except ValueError as exc:
@@ -193,9 +259,13 @@ def _validated_issuer(value: str) -> str:
 
 
 def issuer_for_request(request: Request) -> str:
+    allow_insecure_loopback = _insecure_loopback_allowed()
     configured = os.environ.get("OAUTH_ISSUER", "").strip()
     if configured:
-        return _validated_issuer(configured)
+        return _validated_issuer(configured, allow_insecure_loopback=allow_insecure_loopback)
+
+    if not allow_insecure_loopback:
+        raise RuntimeError("OAUTH_ISSUER is required outside explicit loopback development.")
 
     server = request.scope.get("server")
     if not isinstance(server, (tuple, list)) or len(server) != 2:
@@ -203,13 +273,13 @@ def issuer_for_request(request: Request) -> str:
     host, port = str(server[0]), int(server[1])
     if not _is_loopback(host):
         raise RuntimeError("OAUTH_ISSUER is required outside loopback development.")
-    scheme = str(request.scope.get("scheme") or "http").lower()
-    if scheme not in {"http", "https"}:
-        raise RuntimeError("Unable to derive a valid OAuth issuer from the ASGI server socket.")
     rendered_host = f"[{host}]" if ":" in host and not host.startswith("[") else host
-    default_port = 443 if scheme == "https" else 80
+    default_port = 80
     authority = rendered_host if port == default_port else f"{rendered_host}:{port}"
-    return _validated_issuer(f"{scheme}://{authority}")
+    return _validated_issuer(
+        f"http://{authority}",
+        allow_insecure_loopback=True,
+    )
 
 
 def authorization_server_metadata(issuer: str) -> dict[str, Any]:
@@ -237,7 +307,7 @@ def service_capabilities(issuer: str) -> dict[str, Any]:
         "issuer": issuer,
         "oauth_metadata": f"{issuer}/.well-known/oauth-authorization-server",
         "audiences": [AUDIENCE],
-        "health_endpoint": f"{issuer}/oauth/health",
+        "health_endpoint": f"{issuer}/api/health",
         "project_selection": {
             "required": True,
             "performed_during_authorization": True,
@@ -286,24 +356,56 @@ def _audit(
     return event
 
 
+def _rate_limit_identities(
+    context: AuditContext,
+    client_id: str | None,
+    *,
+    include_remote_ip: bool = True,
+) -> tuple[str, ...]:
+    identities = []
+    if include_remote_ip and context.remote_ip_hash:
+        identities.append(f"ip:{context.remote_ip_hash}")
+    if client_id:
+        identities.append(f"client:{client_id}")
+    if not identities:
+        identities.append("connection:unknown")
+    return tuple(identities)
+
+
+def _rate_limit_keys(operation: str, identities: tuple[str, ...]) -> tuple[str, ...]:
+    return tuple(_context_digest("rate-limit", f"{operation}:{identity}") for identity in identities)
+
+
+def _acquire_rate_limit_locks(db: Session, rate_keys: tuple[str, ...]) -> None:
+    if db.get_bind().dialect.name != "postgresql":
+        return
+    lock_keys = sorted(
+        {int.from_bytes(bytes.fromhex(rate_key)[:8], byteorder="big", signed=True) for rate_key in rate_keys}
+    )
+    for lock_key in lock_keys:
+        db.execute(select(func.pg_advisory_xact_lock(lock_key)))
+
+
 def enforce_rate_limit(
     db: Session,
     operation: str,
     context: AuditContext,
     *,
     client_id: str | None = None,
+    persist_client_id: bool = True,
+    include_remote_ip: bool = True,
 ) -> None:
     limit = PUBLIC_RATE_LIMITS[operation]
     cutoff = _now() - timedelta(seconds=PUBLIC_RATE_WINDOW_SECONDS)
     event_type = f"rate_limit.{operation}"
-    identities = []
-    if context.remote_ip_hash:
-        identities.append(f"ip:{context.remote_ip_hash}")
-    if client_id:
-        identities.append(f"client:{client_id}")
-    if not identities:
-        identities.append("connection:unknown")
-    rate_keys = [_context_digest("rate-limit", f"{operation}:{identity}") for identity in identities]
+    identities = _rate_limit_identities(
+        context,
+        client_id,
+        include_remote_ip=include_remote_ip,
+    )
+    rate_keys = _rate_limit_keys(operation, identities)
+    _acquire_rate_limit_locks(db, rate_keys)
+    audit_client_id = client_id if persist_client_id else None
     for rate_key in rate_keys:
         count = db.scalar(
             select(func.count(OAuthAuditEvent.id)).where(
@@ -318,7 +420,7 @@ def enforce_rate_limit(
                 event_type,
                 "denied",
                 context=context,
-                client_id=client_id,
+                client_id=audit_client_id,
                 rate_limit_key_hash=rate_key,
                 metadata={"reason": "rate_limited"},
             )
@@ -335,17 +437,131 @@ def enforce_rate_limit(
             event_type,
             "success",
             context=context,
-            client_id=client_id,
+            client_id=audit_client_id,
             rate_limit_key_hash=rate_key,
         )
     db.commit()
 
 
+def enforce_management_rate_limit(
+    db: Session,
+    operation: str,
+    context: AuditContext,
+    *,
+    client_id: str | None = None,
+    persist_client_id: bool = True,
+    include_remote_ip: bool = True,
+) -> None:
+    try:
+        enforce_rate_limit(
+            db,
+            operation,
+            context,
+            client_id=client_id,
+            persist_client_id=persist_client_id,
+            include_remote_ip=include_remote_ip,
+        )
+    except OAuthProtocolError as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail=exc.description,
+            headers=exc.headers,
+        ) from exc
+
+
+def _enforce_outstanding_device_limit(
+    db: Session,
+    *,
+    application: OAuthApplication,
+    context: AuditContext,
+) -> None:
+    now = _now()
+    identities = _rate_limit_identities(context, application.client_id)
+    rate_keys = _rate_limit_keys("device_authorization", identities)
+    _acquire_rate_limit_locks(db, rate_keys)
+    counts: list[tuple[str, str, int]] = []
+    for identity, rate_key in zip(identities, rate_keys, strict=True):
+        query = select(func.count(func.distinct(OAuthDeviceAuthorization.id))).where(
+            OAuthDeviceAuthorization.status.in_(("pending", "approved")),
+            OAuthDeviceAuthorization.expires_at > now,
+        )
+        if identity.startswith("client:"):
+            query = query.where(OAuthDeviceAuthorization.client_id == application.client_id)
+        else:
+            query = query.join(
+                OAuthAuditEvent,
+                OAuthAuditEvent.device_authorization_id == OAuthDeviceAuthorization.id,
+            ).where(
+                OAuthAuditEvent.event_type == "device_authorization.created",
+                OAuthAuditEvent.remote_ip_hash == context.remote_ip_hash,
+            )
+        counts.append((identity, rate_key, int(db.scalar(query) or 0)))
+
+    for identity, rate_key, count in counts:
+        if count < MAX_OUTSTANDING_DEVICE_AUTHORIZATIONS:
+            continue
+        _audit(
+            db,
+            "rate_limit.device_outstanding",
+            "denied",
+            context=context,
+            client_id=application.client_id,
+            rate_limit_key_hash=rate_key,
+            metadata={"identity_kind": identity.split(":", 1)[0], "reason": "outstanding_limit"},
+        )
+        db.commit()
+        raise OAuthProtocolError(
+            "temporarily_unavailable",
+            "Too many active device authorizations. Retry shortly.",
+            status_code=429,
+            headers={"Retry-After": str(PUBLIC_RATE_WINDOW_SECONDS)},
+        )
+
+
+def _application_record(db: Session, client_id: str) -> OAuthApplication | None:
+    return db.scalar(
+        select(OAuthApplication)
+        .where(OAuthApplication.client_id == client_id)
+        .execution_options(populate_existing=True)
+    )
+
+
 def _application(db: Session, client_id: str) -> OAuthApplication:
-    application = db.get(OAuthApplication, client_id)
+    application = _application_record(db, client_id)
     if application is None or application.status != "active" or application.client_type != "public":
         raise OAuthProtocolError("invalid_client", "The public client is not registered or active.", status_code=401)
     return application
+
+
+def _rate_limited_application(
+    db: Session,
+    operation: str,
+    context: AuditContext,
+    client_id: str,
+) -> OAuthApplication:
+    known_client = (
+        db.scalar(select(OAuthApplication.client_id).where(OAuthApplication.client_id == client_id)) is not None
+    )
+    enforce_rate_limit(
+        db,
+        operation,
+        context,
+        client_id=client_id,
+        persist_client_id=known_client,
+        include_remote_ip=False,
+    )
+    return _application(db, client_id)
+
+
+def rate_limit_public_client(
+    db: Session,
+    operation: str,
+    context: AuditContext,
+    client_id: str,
+) -> str:
+    validated_client_id = _validated_client_id(client_id)
+    _rate_limited_application(db, operation, context, validated_client_id)
+    return validated_client_id
 
 
 def _validated_client_id(client_id: str) -> str:
@@ -390,15 +606,20 @@ def create_device_authorization(
     code_challenge_method: str,
     issuer: str,
     context: AuditContext,
+    rate_limit_client: bool = True,
 ) -> dict[str, Any]:
     client_id = _validated_client_id(client_id)
-    enforce_rate_limit(db, "device_authorization", context, client_id=client_id)
-    application = _application(db, client_id)
+    application = (
+        _rate_limited_application(db, "device_authorization", context, client_id)
+        if rate_limit_client
+        else _application(db, client_id)
+    )
     scopes = _validated_requested_scopes(application, scope)
     if audience != AUDIENCE or audience not in (application.allowed_audiences or []):
         raise OAuthProtocolError("invalid_target", "The requested audience is not allowed.")
     if code_challenge_method != "S256" or not _PKCE_CHALLENGE_RE.fullmatch(code_challenge):
         raise OAuthProtocolError("invalid_request", "A valid PKCE S256 code challenge is required.")
+    _enforce_outstanding_device_limit(db, application=application, context=context)
 
     now = _now()
     for _attempt in range(5):
@@ -416,12 +637,13 @@ def create_device_authorization(
             interval_seconds=DEVICE_POLL_INTERVAL_SECONDS,
             expires_at=now + timedelta(seconds=DEVICE_CODE_TTL_SECONDS),
         )
-        db.add(device)
         try:
-            db.flush()
+            with db.begin_nested():
+                db.add(device)
+                db.flush()
             break
         except IntegrityError:
-            db.rollback()
+            continue
     else:
         raise OAuthProtocolError(
             "temporarily_unavailable",
@@ -504,8 +726,20 @@ def approve_device_request(
     approved_scopes: list[str] | None,
     context: AuditContext,
 ) -> dict[str, Any]:
+    initial_device = db.get(OAuthDeviceAuthorization, request_id)
+    initial_client_id = initial_device.client_id if initial_device is not None else None
+    enforce_management_rate_limit(
+        db,
+        "device_approval",
+        context,
+        client_id=initial_client_id,
+        persist_client_id=initial_client_id is not None,
+    )
     device = db.scalar(
-        select(OAuthDeviceAuthorization).where(OAuthDeviceAuthorization.id == request_id).with_for_update()
+        select(OAuthDeviceAuthorization)
+        .where(OAuthDeviceAuthorization.id == request_id)
+        .execution_options(populate_existing=True)
+        .with_for_update()
     )
     if device is None:
         raise HTTPException(status_code=404, detail="Device request not found.")
@@ -566,8 +800,20 @@ def reject_device_request(
     user: User,
     context: AuditContext,
 ) -> dict[str, Any]:
+    initial_device = db.get(OAuthDeviceAuthorization, request_id)
+    initial_client_id = initial_device.client_id if initial_device is not None else None
+    enforce_management_rate_limit(
+        db,
+        "device_rejection",
+        context,
+        client_id=initial_client_id,
+        persist_client_id=initial_client_id is not None,
+    )
     device = db.scalar(
-        select(OAuthDeviceAuthorization).where(OAuthDeviceAuthorization.id == request_id).with_for_update()
+        select(OAuthDeviceAuthorization)
+        .where(OAuthDeviceAuthorization.id == request_id)
+        .execution_options(populate_existing=True)
+        .with_for_update()
     )
     if device is None:
         raise HTTPException(status_code=404, detail="Device request not found.")
@@ -578,13 +824,13 @@ def reject_device_request(
         raise HTTPException(status_code=409, detail="Approved device requests cannot be rejected.")
     if device.status == "exchanged":
         raise HTTPException(status_code=409, detail="Device request has already been exchanged.")
+    application = db.get(OAuthApplication, device.client_id)
+    if application is None:
+        raise HTTPException(status_code=404, detail="Device request not found.")
     if device.status == "pending":
         device.status = "denied"
         device.user_id = user.id
         device.denied_at = now
-    application = db.get(OAuthApplication, device.client_id)
-    if application is None:
-        raise HTTPException(status_code=404, detail="Device request not found.")
     _audit(
         db,
         "device_authorization.denied",
@@ -602,7 +848,7 @@ def _refresh_retention_seconds() -> int:
     if not raw:
         return REFRESH_REPLAY_RETENTION_SECONDS
     try:
-        return max(0, min(int(raw), 30 * 24 * 60 * 60))
+        return max(1, min(int(raw), 30 * 24 * 60 * 60))
     except ValueError:
         return REFRESH_REPLAY_RETENTION_SECONDS
 
@@ -628,9 +874,13 @@ def exchange_device_code(
     client_id: str,
     code_verifier: str,
     context: AuditContext,
+    rate_limit_client: bool = True,
 ) -> dict[str, Any]:
     client_id = _validated_client_id(client_id)
-    enforce_rate_limit(db, "token", context, client_id=client_id)
+    if rate_limit_client:
+        _rate_limited_application(db, "token", context, client_id)
+    else:
+        _application(db, client_id)
     device_hash = hash_opaque_value(device_code) if device_code else ""
     device = db.scalar(
         select(OAuthDeviceAuthorization)
@@ -673,7 +923,7 @@ def exchange_device_code(
     if device.status == "denied":
         raise OAuthProtocolError("access_denied", "The device authorization was denied.")
     if device.status != "approved":
-        raise OAuthProtocolError("expired_token", "The device authorization is no longer usable.")
+        raise OAuthProtocolError("invalid_grant", "The device authorization is no longer usable.")
     if not is_valid_pkce_verifier(code_verifier) or not hmac.compare_digest(
         pkce_s256(code_verifier), device.code_challenge
     ):
@@ -719,7 +969,6 @@ def exchange_device_code(
         scopes=list(scopes),
         status="active",
         access_token_hash=hash_opaque_value(access_token),
-        access_token_prefix=credential_prefix(access_token),
         access_expires_at=now + timedelta(seconds=ACCESS_TOKEN_TTL_SECONDS),
         refresh_expires_at=refresh_expires_at,
     )
@@ -728,7 +977,6 @@ def exchange_device_code(
         grant_id=grant.id,
         family_id=grant.id,
         token_hash=hash_opaque_value(refresh_token),
-        token_prefix=credential_prefix(refresh_token),
         status="active",
         expires_at=refresh_expires_at,
         retain_until=refresh_expires_at + timedelta(seconds=_refresh_retention_seconds()),
@@ -766,9 +1014,13 @@ def refresh_access_token(
     refresh_token: str,
     client_id: str,
     context: AuditContext,
+    rate_limit_client: bool = True,
 ) -> dict[str, Any]:
     client_id = _validated_client_id(client_id)
-    enforce_rate_limit(db, "token", context, client_id=client_id)
+    if rate_limit_client:
+        _rate_limited_application(db, "token", context, client_id)
+    else:
+        _application(db, client_id)
     token_hash = hash_opaque_value(refresh_token) if refresh_token else ""
     token_identity = db.execute(
         select(OAuthRefreshToken.id, OAuthRefreshToken.grant_id).where(OAuthRefreshToken.token_hash == token_hash)
@@ -805,7 +1057,7 @@ def refresh_access_token(
         db.commit()
         raise OAuthProtocolError("invalid_grant", "The refresh token has expired.")
 
-    application = db.get(OAuthApplication, grant.client_id)
+    application = _application_record(db, grant.client_id)
     user = db.get(User, grant.user_id)
     workspace = _workspace(db)
     if (
@@ -830,7 +1082,6 @@ def refresh_access_token(
         grant_id=grant.id,
         family_id=grant.id,
         token_hash=hash_opaque_value(next_refresh_token),
-        token_prefix=credential_prefix(next_refresh_token),
         status="active",
         expires_at=token.expires_at,
         idle_expires_at=token.idle_expires_at,
@@ -843,7 +1094,6 @@ def refresh_access_token(
     token.last_used_at = now
     token.replaced_by_id = replacement.id
     grant.access_token_hash = hash_opaque_value(next_access_token)
-    grant.access_token_prefix = credential_prefix(next_access_token)
     grant.access_expires_at = now + timedelta(seconds=ACCESS_TOKEN_TTL_SECONDS)
     application.last_used_at = now
     _audit(db, "token.refresh", "success", context=context, grant=grant)
@@ -858,9 +1108,13 @@ def revoke_token(
     token_type_hint: str | None,
     client_id: str,
     context: AuditContext,
+    rate_limit_client: bool = True,
 ) -> None:
     client_id = _validated_client_id(client_id)
-    enforce_rate_limit(db, "revocation", context, client_id=client_id)
+    if rate_limit_client:
+        _rate_limited_application(db, "revocation", context, client_id)
+    else:
+        _application(db, client_id)
     token_hash = hash_opaque_value(token) if token else ""
     now = _now()
 
@@ -884,7 +1138,6 @@ def revoke_token(
     grant = db.scalar(select(OAuthGrant).where(OAuthGrant.access_token_hash == token_hash).with_for_update())
     if grant is not None and grant.client_id == client_id:
         grant.access_token_hash = hash_opaque_value(generate_opaque_token(ACCESS_TOKEN_PREFIX))
-        grant.access_token_prefix = "revoked"
         grant.access_expires_at = now
         _audit(db, "token.revoked", "success", context=context, grant=grant, metadata={"kind": "access"})
         db.commit()
@@ -927,11 +1180,17 @@ def _resource_exception(request: Request, status_code: int, code: str, descripti
 
 async def _assert_no_project_override(request: Request, project_id: str) -> None:
     supplied: list[Any] = []
-    if "x-project-id" in request.headers:
-        supplied.append(request.headers.get("x-project-id"))
+    project_header_values = request.headers.getlist("x-project-id")
+    if len(project_header_values) > 1:
+        raise _resource_exception(request, 403, "project_scope_mismatch", "The project header is ambiguous.")
+    supplied.extend(project_header_values)
     supplied.extend(request.query_params.getlist("project_id"))
     content_type = request.headers.get("content-type", "").split(";", 1)[0].strip().lower()
-    if content_type == "application/json":
+    content_subtype = content_type.rsplit("/", 1)[-1]
+    parses_as_json = not content_type or (
+        content_type.startswith("application/") and (content_subtype == "json" or content_subtype.endswith("+json"))
+    )
+    if parses_as_json:
         body = await request.body()
         if body:
             try:
@@ -990,12 +1249,14 @@ async def authorize_resource_request(
     workspace = _workspace(db)
     project = find_project(workspace, grant.project_id)
     role = _project_role(user, grant.project_id, workspace) if user is not None else None
-    required_for_role = (
-        required_scopes[0]
-        if request.url.path != "/v1/ping/"
-        else (MEMORY_WRITE_SCOPE if MEMORY_WRITE_SCOPE in scopes else MEMORY_READ_SCOPE)
-    )
-    role_allowed = role_allows_write(role) if required_for_role == MEMORY_WRITE_SCOPE else role_allows_read(role)
+    if request.url.path == "/v1/ping/":
+        role_allowed = any(
+            (scope == MEMORY_READ_SCOPE and role_allows_read(role))
+            or (scope == MEMORY_WRITE_SCOPE and role_allows_write(role))
+            for scope in scopes
+        )
+    else:
+        role_allowed = role_allows_write(role) if required_scopes[0] == MEMORY_WRITE_SCOPE else role_allows_read(role)
     if user is None or project is None or not role_allowed:
         raise _resource_exception(request, 403, "access_denied", "Project access is no longer available.")
     await _assert_no_project_override(request, grant.project_id)
@@ -1216,10 +1477,12 @@ def _safe_operator_metadata(value: Any) -> dict[str, Any]:
 
 
 def list_applications(db: Session, *, user: User) -> dict[str, Any]:
+    if user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin role required.")
     applications = db.scalars(
         select(OAuthApplication).order_by(OAuthApplication.display_name, OAuthApplication.client_id)
     ).all()
-    return {"items": [_application_response(item) for item in applications], "can_register": user.role == "admin"}
+    return {"items": [_application_response(item) for item in applications], "can_register": True}
 
 
 def register_application(
@@ -1253,7 +1516,16 @@ def register_application(
         raise HTTPException(status_code=400, detail="Application scopes contain an unsupported value.") from exc
     if not scopes:
         raise HTTPException(status_code=400, detail="At least one application scope is required.")
-    if db.get(OAuthApplication, client_id) is not None:
+    enforce_management_rate_limit(
+        db,
+        "application_registration",
+        context,
+        client_id=client_id,
+        persist_client_id=False,
+    )
+    registration_lock = _context_digest("application-registration", client_id)
+    _acquire_rate_limit_locks(db, (registration_lock,))
+    if _application_record(db, client_id) is not None:
         raise HTTPException(status_code=409, detail="An application with this client ID already exists.")
     sanitized_metadata = _sanitize_operator_metadata(operator_metadata)
     if len(json.dumps(sanitized_metadata, ensure_ascii=False).encode("utf-8")) > 8192:
@@ -1269,7 +1541,11 @@ def register_application(
     )
     db.add(application)
     _audit(db, "application.registered", "success", context=context, client_id=client_id, user_id=user.id)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="An application with this client ID already exists.") from exc
     return _application_response(application)
 
 

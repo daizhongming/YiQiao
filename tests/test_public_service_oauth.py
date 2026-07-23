@@ -101,6 +101,8 @@ def test_exact_oauth_model_set_and_relationships():
         "audit_events",
     }
     assert set(sa.inspect(models.OAuthRefreshToken).relationships.keys()) == {"grant", "replaced_by"}
+    assert "access_token_prefix" not in models.OAuthGrant.__table__.columns
+    assert "token_prefix" not in models.OAuthRefreshToken.__table__.columns
 
 
 def test_prune_oauth_is_batched_repeatable_and_preserves_replay_window():
@@ -183,7 +185,6 @@ def test_prune_oauth_is_batched_repeatable_and_preserves_replay_window():
             scopes=list(protocol.SUPPORTED_SCOPES),
             status="revoked",
             access_token_hash=_digest("old-access"),
-            access_token_prefix="yqoa_old",
             access_expires_at=now - timedelta(days=4),
             refresh_expires_at=now - timedelta(days=2),
             revoked_at=now - timedelta(days=2),
@@ -198,7 +199,6 @@ def test_prune_oauth_is_batched_repeatable_and_preserves_replay_window():
             scopes=[protocol.MEMORY_READ_SCOPE],
             status="revoked",
             access_token_hash=_digest("live-access"),
-            access_token_prefix="yqoa_live",
             access_expires_at=now - timedelta(hours=1),
             refresh_expires_at=now + timedelta(days=10),
             revoked_at=now,
@@ -208,7 +208,6 @@ def test_prune_oauth_is_batched_repeatable_and_preserves_replay_window():
             grant_id=old_grant_id,
             family_id=old_grant_id,
             token_hash=_digest("old-refresh"),
-            token_prefix="yqor_old",
             status="rotated",
             expires_at=now - timedelta(days=3),
             rotated_at=now - timedelta(days=3),
@@ -219,7 +218,6 @@ def test_prune_oauth_is_batched_repeatable_and_preserves_replay_window():
             grant_id=live_grant_id,
             family_id=live_grant_id,
             token_hash=_digest("retained-refresh"),
-            token_prefix="yqor_live",
             status="rotated",
             expires_at=now - timedelta(hours=1),
             rotated_at=now - timedelta(hours=1),
@@ -307,6 +305,10 @@ def test_prune_oauth_is_batched_repeatable_and_preserves_replay_window():
 
 def test_cleanup_environment_validation():
     assert prune_oauth._environment_integer({}, "VALUE", 7, minimum=1) == 7
+    with pytest.raises(ValueError, match="must be >= 1"):
+        prune_oauth._environment_integer({"VALUE": "0"}, "VALUE", 7, minimum=1)
+    with pytest.raises(ValueError, match="refresh_replay_grace_seconds must be >= 1"):
+        prune_oauth.prune_oauth(None, refresh_replay_grace_seconds=0)
     with pytest.raises(ValueError, match="must be an integer"):
         prune_oauth._environment_integer({"VALUE": "not-an-int"}, "VALUE", 7, minimum=1)
     with pytest.raises(ValueError, match="must be <= 10"):
