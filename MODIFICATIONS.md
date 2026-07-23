@@ -19,13 +19,13 @@ Run `python scripts/audit_modification_notices.py` from a complete Git
 checkout to verify this list and every embedded notice. Unknown modified
 file formats fail closed.
 
-Modified upstream files: **216**
+Modified upstream files: **227**
 
-Path-list SHA-256: `25D0B7BAE1932CFFAACDC96F2AD7B085AFD101493FAACDF7D8DFEC11129B9D1C`
+Path-list SHA-256: `3C72CB68E82D9A4C4DBA45E2BF182063651171744BA9AD60CF9A6149A133069F`
 
-YiQiao-originated files: **171**
+YiQiao-originated files: **178**
 
-Originated path-list SHA-256: `DA05632D6F39C04DAF651EFADFE4CE59247804909C1735AE36E97520A6D91D2F`
+Originated path-list SHA-256: `7BD61F41954496BF4B69C1203DA75DF92842C9F8E50B604868EBD678A4FE2567`
 
 ## Files
 
@@ -124,6 +124,7 @@ Originated path-list SHA-256: `DA05632D6F39C04DAF651EFADFE4CE59247804909C1735AE3
 - `server/auth.py` (source comment)
 - `server/dashboard/.dockerignore` (source comment)
 - `server/dashboard/.env.example` (source comment)
+- `server/dashboard/.gitignore` (source comment)
 - `server/dashboard/Dockerfile` (source comment)
 - `server/dashboard/next.config.mjs` (source comment)
 - `server/dashboard/package.json` (JSON metadata)
@@ -164,8 +165,18 @@ Originated path-list SHA-256: `DA05632D6F39C04DAF651EFADFE4CE59247804909C1735AE3
 - `server/dashboard/src/components/self-hosted/locked-page.tsx` (source comment)
 - `server/dashboard/src/components/shared/data-table.tsx` (source comment)
 - `server/dashboard/src/components/shared/table-skeleton.tsx` (source comment)
+- `server/dashboard/src/components/ui/alert-dialog.tsx` (source comment)
+- `server/dashboard/src/components/ui/button.tsx` (source comment)
 - `server/dashboard/src/components/ui/calendar.tsx` (source comment)
+- `server/dashboard/src/components/ui/card.tsx` (source comment)
 - `server/dashboard/src/components/ui/dialog.tsx` (source comment)
+- `server/dashboard/src/components/ui/select.tsx` (source comment)
+- `server/dashboard/src/components/ui/sheet.tsx` (source comment)
+- `server/dashboard/src/components/ui/sonner.tsx` (source comment)
+- `server/dashboard/src/components/ui/table.tsx` (source comment)
+- `server/dashboard/src/components/ui/textarea.tsx` (source comment)
+- `server/dashboard/src/components/ui/toast.tsx` (source comment)
+- `server/dashboard/src/constants/ui-components.ts` (source comment)
 - `server/dashboard/src/lib/auth.tsx` (source comment)
 - `server/dashboard/src/lib/error-message.ts` (source comment)
 - `server/dashboard/src/lib/validators.ts` (source comment)

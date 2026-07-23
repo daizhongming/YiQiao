@@ -75,6 +75,8 @@ docs/yiqiao/OPERATIONS.md
 docs/yiqiao/OPERATIONS.zh-CN.md
 docs/yiqiao/PUBLIC_CONNECTOR.md
 docs/yiqiao/PUBLIC_CONNECTOR.zh-CN.md
+docs/yiqiao/RELEASE_0.2.0.md
+docs/yiqiao/RELEASE_0.2.0.zh-CN.md
 docs/yiqiao/README.md
 docs/yiqiao/README.zh-CN.md
 docs/yiqiao/SECURITY_AUDIT.md
@@ -91,6 +93,7 @@ scripts/check_docs_localization.py
 scripts/chat_import_artifact_compare.py
 scripts/chat_import_benchmark.py
 scripts/chat_import_quality_queries.sql
+scripts/dashboard_mock_api.py
 scripts/full_stack_smoke.py
 scripts/import_chat_history.py
 scripts/init.ps1
@@ -134,6 +137,8 @@ server/dashboard/src/app/(root)/dashboard/settings/settings-client.tsx
 server/dashboard/src/app/(root)/dashboard/settings/settings-cloud-client.tsx
 server/dashboard/src/app/(root)/dashboard/settings/usage-limits/page.tsx
 server/dashboard/src/app/(root)/playground/page.tsx
+server/dashboard/src/app/api/backend/[...path]/route.ts
+server/dashboard/src/app/api/backend/[...path]/route.test.ts
 server/dashboard/src/app/.well-known/oauth-authorization-server/route.ts
 server/dashboard/src/app/.well-known/service-capabilities/route.ts
 server/dashboard/src/app/icon.svg
@@ -155,6 +160,7 @@ server/dashboard/src/lib/transport-peer.test.ts
 server/dashboard/src/lib/yiqiao-api-examples.test.ts
 server/dashboard/src/lib/yiqiao-api-examples.ts
 server/dashboard/src/middleware.test.ts
+server/dashboard/src/styles/yiqiao-theme.css
 server/dashboard/transport-peer.cjs
 server/dashboard/vitest.config.ts
 server/docker-compose.build.yaml
@@ -187,6 +193,7 @@ tests/test_chat_import.py
 tests/test_chat_import_artifact_compare.py
 tests/test_chat_import_benchmark.py
 tests/test_dashboard_font_licenses.py
+tests/test_dashboard_mock_api.py
 tests/test_docs_localization.py
 tests/test_environment_isolation.py
 tests/test_exports_router.py

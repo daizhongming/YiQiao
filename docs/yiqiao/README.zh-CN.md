@@ -1,5 +1,7 @@
 # YiQiao 文档
 
+- [YiQiao 0.2.0 发布说明](RELEASE_0.2.0.zh-CN.md)
+
 **简体中文** | [English](README.md)
 
 - [运维指南](OPERATIONS.zh-CN.md)：部署模式、配置、持久化、备份、升级、回滚和卸载。

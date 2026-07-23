@@ -1,5 +1,7 @@
 # YiQiao Documentation
 
+- [YiQiao 0.2.0 release notes](RELEASE_0.2.0.md)
+
 **English** | [简体中文](README.zh-CN.md)
 
 - [Operations](OPERATIONS.md): deployment modes, configuration, persistence,
