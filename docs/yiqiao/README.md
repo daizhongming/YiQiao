@@ -1,5 +1,7 @@
 # YiQiao Documentation
 
+- [YiQiao 0.2.0 release notes](RELEASE_0.2.0.md)
+
 **English** | [简体中文](README.zh-CN.md)
 
 - [Operations](OPERATIONS.md): deployment modes, configuration, persistence,
@@ -8,6 +10,8 @@
   YiQiao release layout.
 - [Troubleshooting](TROUBLESHOOTING.md): startup, authentication, provider,
   database, graph, and import diagnostics.
+- [Public connector](PUBLIC_CONNECTOR.md): issuer configuration, OAuth Device
+  Flow, application registration, scopes, revocation, cleanup, and security.
 - [Secret scanning](SECURITY_AUDIT.md): current-tree policy, reviewed historical
   fingerprints, and reproducible Gitleaks commands.
 - [Licensing and provenance](LEGAL.md): licensing, provenance, third-party

@@ -15,6 +15,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Literal, Optional
 
+import oauth_service
 import telemetry
 from auth import (
     ADMIN_API_KEY,
@@ -85,11 +86,11 @@ from pydantic import model_validator
 from rate_limit import limiter
 from routers import api_keys as api_keys_router
 from routers import auth as auth_router
-from routers import boss_helper as boss_helper_router
 from routers import entities as entities_router
 from routers import exports as exports_router
 from routers import graph as graph_router
 from routers import memories as memories_router
+from routers import oauth as oauth_router
 from routers import playground as playground_router
 from routers import requests as requests_router
 from routers import settings as settings_router
@@ -144,7 +145,7 @@ SENSITIVE_CONFIG_KEYS = {
     "token",
 }
 SKIPPED_REQUEST_LOG_PATHS = {"/api/health", "/docs", "/redoc", "/openapi.json"}
-SKIPPED_REQUEST_LOG_PREFIXES = ("/requests",)
+SKIPPED_REQUEST_LOG_PREFIXES = ("/requests", "/oauth", "/.well-known/")
 
 BUNDLED_LLM_PROVIDERS = ("openai", "anthropic", "gemini")
 BUNDLED_EMBEDDER_PROVIDERS = ("openai", "gemini")
@@ -569,7 +570,7 @@ app = FastAPI(
         "Authentication supports Bearer JWT, project API keys via `X-API-Key`, "
         "and the `ADMIN_API_KEY` environment variable."
     ),
-    version="0.1.1",
+    version="0.2.0",
     redirect_slashes=False,
 )
 app.state.limiter = limiter
@@ -599,7 +600,7 @@ app.add_middleware(
 )
 
 app.include_router(auth_router.router)
-app.include_router(boss_helper_router.router)
+app.include_router(oauth_router.router)
 app.include_router(api_keys_router.router)
 app.include_router(entities_router.router)
 app.include_router(exports_router.router)
@@ -1291,6 +1292,9 @@ def _persist_request_log(
 
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
+    oauth_protocol_request = request.url.path.startswith("/oauth") or request.url.path.startswith("/.well-known/")
+    if oauth_protocol_request:
+        request.state.suppress_request_log = True
     request.state.auth_type = getattr(request.state, "auth_type", "none")
     request.state.api_key_id = None
     request.state.actor_user_id = None
@@ -1307,6 +1311,25 @@ async def log_requests(request: Request, call_next):
         response = await call_next(request)
         status_code = response.status_code
         response.headers["X-Request-ID"] = rid
+        oauth_authenticated = getattr(request.state, "auth_type", "none") == "oauth"
+        if oauth_protocol_request or oauth_authenticated:
+            response.headers["Cache-Control"] = "no-store, no-cache"
+            response.headers["Pragma"] = "no-cache"
+        if 200 <= status_code < 300 and oauth_authenticated:
+            grant_id = getattr(request.state, "oauth_grant_id", None)
+            access_token_hash = getattr(request.state, "oauth_access_token_hash", None)
+            context = getattr(request.state, "oauth_audit_context", None)
+            if grant_id and access_token_hash and context:
+                try:
+                    with SessionLocal() as oauth_db:
+                        oauth_service.record_resource_success(
+                            oauth_db,
+                            grant_id=uuid.UUID(grant_id),
+                            access_token_hash=access_token_hash,
+                            context=context,
+                        )
+                except Exception:
+                    logging.exception("Failed to persist OAuth resource-use timestamps")
         warnings = getattr(request.state, "quota_warnings", [])
         if warnings:
             response.headers["X-Quota-Warning"] = ", ".join(warnings)

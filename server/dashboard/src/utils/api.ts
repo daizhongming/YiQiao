@@ -4,6 +4,7 @@ import axios, { AxiosError, AxiosInstance } from "axios";
 
 let cachedToken: string | null = null;
 const LOGIN_PATH = "/login";
+const BACKEND_PROXY_PATH = "/api/backend";
 const PROJECT_STORAGE_KEY = "yiqiao_project_id";
 export const DEFAULT_PROJECT_ID = "default-project";
 
@@ -55,7 +56,7 @@ const createApi = (): AxiosInstance & {
   postStream: (url: string, data: unknown) => Promise<Response>;
 } => {
   const api = axios.create({
-    baseURL: process.env.NEXT_PUBLIC_API_URL,
+    baseURL: BACKEND_PROXY_PATH,
   });
 
   api.interceptors.request.use(
@@ -101,7 +102,7 @@ const createApi = (): AxiosInstance & {
   );
 
   const postStream = async (url: string, data: unknown): Promise<Response> => {
-    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}${url}`, {
+    const response = await fetch(`${BACKEND_PROXY_PATH}${url}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

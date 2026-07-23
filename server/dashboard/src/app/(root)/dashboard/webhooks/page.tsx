@@ -210,7 +210,7 @@ export default function WebhooksPage() {
   ];
 
   return (
-    <div className="space-y-5">
+    <div className="min-w-0 space-y-5">
       <div>
         <h1 className="text-xl font-semibold font-fustat">Webhooks</h1>
         <p className="text-sm text-onSurface-default-secondary mt-1">
@@ -220,7 +220,7 @@ export default function WebhooksPage() {
       </div>
 
       <Card className="border-memBorder-primary">
-        <CardContent className="p-6">
+        <CardContent className="p-4 sm:p-6">
           <form className="space-y-5" onSubmit={createWebhook}>
             <h2 className="text-lg font-semibold">Add New Webhook</h2>
 
@@ -275,16 +275,17 @@ export default function WebhooksPage() {
             {secret && (
               <div className="space-y-2 border-t border-memBorder-primary pt-5">
                 <Label>Signing secret</Label>
-                <div className="flex gap-2">
+                <div className="flex min-w-0 gap-2">
                   <Input
                     readOnly
                     value={secret}
-                    className="font-mono text-xs"
+                    className="min-w-0 flex-1 font-mono text-xs"
                   />
                   <Button
                     type="button"
                     variant="outline"
                     size="icon"
+                    className="shrink-0"
                     onClick={() => navigator.clipboard.writeText(secret)}
                     aria-label="Copy signing secret"
                     title="Copy signing secret"

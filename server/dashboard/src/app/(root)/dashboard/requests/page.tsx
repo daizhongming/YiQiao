@@ -210,7 +210,7 @@ export default function RequestsPage() {
             aria-label="Custom range start"
             value={customStart}
             max={customEnd || undefined}
-            className="w-[160px]"
+            className="w-full sm:w-[160px]"
             onChange={(event) => {
               setPage(1);
               setCustomStart(event.target.value);
@@ -221,7 +221,7 @@ export default function RequestsPage() {
             aria-label="Custom range end"
             value={customEnd}
             min={customStart || undefined}
-            className="w-[160px]"
+            className="w-full sm:w-[160px]"
             onChange={(event) => {
               setPage(1);
               setCustomEnd(event.target.value);
@@ -256,10 +256,10 @@ export default function RequestsPage() {
           <Info className="mt-2 size-4 shrink-0 text-onSurface-default-tertiary" />
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex w-full gap-2 sm:w-auto">
           <Button
             variant="outline"
-            className="h-9 gap-2"
+            className="h-9 flex-1 gap-2 sm:flex-none"
             onClick={() => setFiltersOpen((open) => !open)}
           >
             <SlidersHorizontal className="size-4" />
@@ -272,7 +272,7 @@ export default function RequestsPage() {
           </Button>
           <Button
             variant="outline"
-            className="h-9 gap-2"
+            className="h-9 flex-1 gap-2 sm:flex-none"
             disabled={isLoading}
             onClick={() => void refetch()}
           >
@@ -283,7 +283,7 @@ export default function RequestsPage() {
       </div>
 
       {filtersOpen && (
-        <div className="grid gap-3 border-y border-memBorder-primary bg-surface-default-secondary p-3 sm:grid-cols-[140px_minmax(180px,1fr)_160px_auto_auto]">
+        <div className="grid gap-3 border-y border-memBorder-primary bg-surface-default-secondary p-3 sm:grid-cols-2 lg:grid-cols-[140px_minmax(180px,1fr)_160px_auto_auto]">
           <Select
             value={draftFilters.entityType}
             onValueChange={(value) =>
@@ -420,7 +420,7 @@ export default function RequestsPage() {
         </Card>
       )}
 
-      <div className="flex items-center justify-between text-sm text-onSurface-default-tertiary">
+      <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-onSurface-default-tertiary">
         <span>
           {data.total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1} -{" "}
           {Math.min(page * PAGE_SIZE, data.total)} of {data.total}

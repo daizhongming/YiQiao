@@ -19,6 +19,7 @@ interface DataTableProps<T> {
   data: T[];
   columns: Column<T>[];
   className?: string;
+  ariaLabel?: string;
   getRowKey?: (row: T, rowIndex: number) => string | number;
   onRowClick?: (row: T, rowIndex: number) => void;
   getRowClassName?: (row: T, rowIndex: number) => string | undefined;
@@ -54,22 +55,29 @@ export function DataTable<T>({
   data,
   columns,
   className = "",
+  ariaLabel = "Data table",
   getRowKey,
   onRowClick,
   getRowClassName,
 }: DataTableProps<T>) {
   const minHeight = data.length > 0 ? Math.max(76, 38 + data.length * 38) : 100;
-  // Proportional column widths so table fits container (width numbers treated as relative weights)
+  // Preserve proportional columns while honoring their combined width on narrow screens.
   const totalWeight = columns.reduce(
     (sum, col) => sum + (typeof col.width === "number" ? col.width : 100),
     0,
   );
   return (
     <div
-      className={`min-w-0 max-w-full overflow-hidden transition-all duration-300 ease-in-out ${className}`}
+      role="region"
+      aria-label={ariaLabel}
+      tabIndex={0}
+      className={`min-w-0 max-w-full overflow-x-auto overscroll-x-contain rounded-[inherit] transition-all duration-300 ease-in-out focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring motion-reduce:transition-none ${className}`}
       style={{ minHeight: `${minHeight}px` }}
     >
-      <table className="table-fixed w-full">
+      <table
+        className="w-full table-fixed"
+        style={totalWeight > 0 ? { minWidth: `${totalWeight}px` } : undefined}
+      >
         <colgroup>
           {columns.map((col, i) => {
             const weight = typeof col.width === "number" ? col.width : 100;
@@ -168,9 +176,25 @@ export function DataTable<T>({
             <tr
               key={getRowKey ? String(getRowKey(row, rowIndex)) : rowIndex}
               className={`${classes.tableRow} ${
-                onRowClick ? "cursor-pointer" : ""
-              } ${getRowClassName ? (getRowClassName(row, rowIndex) ?? "") : ""} animate-fade-in`}
+                onRowClick
+                  ? "cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
+                  : ""
+              } ${getRowClassName ? (getRowClassName(row, rowIndex) ?? "") : ""} animate-fade-in motion-reduce:animate-none`}
+              tabIndex={onRowClick ? 0 : undefined}
               onClick={onRowClick ? () => onRowClick(row, rowIndex) : undefined}
+              onKeyDown={
+                onRowClick
+                  ? (event) => {
+                      if (
+                        event.target === event.currentTarget &&
+                        (event.key === "Enter" || event.key === " ")
+                      ) {
+                        event.preventDefault();
+                        onRowClick(row, rowIndex);
+                      }
+                    }
+                  : undefined
+              }
             >
               {columns.map((column, colIndex) => {
                 const value = row[column.key];

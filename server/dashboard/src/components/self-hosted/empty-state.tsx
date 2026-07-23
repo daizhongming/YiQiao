@@ -25,7 +25,7 @@ export function EmptyState({
       : `/images/no-${image}.svg`;
 
   return (
-    <div className="flex flex-col items-center justify-center py-16 text-center">
+    <div className="flex min-h-64 flex-col items-center justify-center px-4 py-12 text-center sm:py-16">
       <Image
         src={src}
         alt=""
@@ -34,15 +34,19 @@ export function EmptyState({
         priority
         className="mb-4 opacity-80"
       />
-      <p className="text-sm font-medium text-onSurface-default-primary">
+      <p className="text-sm font-semibold text-onSurface-default-primary">
         {title}
       </p>
       {description && (
-        <p className="text-xs text-onSurface-default-tertiary mt-1 max-w-xs">
+        <p className="mt-1 max-w-sm text-xs leading-relaxed text-onSurface-default-tertiary">
           {description}
         </p>
       )}
-      {children}
+      {children && (
+        <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+          {children}
+        </div>
+      )}
     </div>
   );
 }

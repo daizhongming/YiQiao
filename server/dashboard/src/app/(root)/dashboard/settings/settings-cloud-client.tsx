@@ -1,3 +1,5 @@
+// This file was modified in 2026 by YiQiao contributors. See NOTICE.
+
 "use client";
 
 import Link from "next/link";
@@ -1373,7 +1375,7 @@ export default function SettingsCloudClient({
 
         {section === "project-extraction" && (
           <SettingsPanel>
-            <div className="flex items-center justify-between gap-4 p-5">
+            <div className="flex flex-wrap items-center justify-between gap-4 p-5">
               <div>
                 <h2 className="text-sm font-semibold">
                   Multilingual Memory Extraction
@@ -1683,7 +1685,7 @@ export default function SettingsCloudClient({
 
         {section === "project-retention" && (
           <SettingsPanel>
-            <div className="flex items-center justify-between gap-4 p-5">
+            <div className="flex flex-wrap items-center justify-between gap-4 p-5">
               <div>
                 <h2 className="text-sm font-semibold">Memory Decay</h2>
                 <p className="mt-1 max-w-xl text-xs leading-5 text-onSurface-default-tertiary">
@@ -1817,7 +1819,7 @@ export default function SettingsCloudClient({
             </div>
 
             <div className="divide-y divide-memBorder-primary border-t border-memBorder-primary">
-              <div className="flex items-center justify-between gap-4 px-5 py-4">
+              <div className="flex flex-wrap items-center justify-between gap-4 px-5 py-4">
                 <Label
                   htmlFor="playground-force-add-only"
                   className="text-sm font-medium"
@@ -1833,7 +1835,7 @@ export default function SettingsCloudClient({
                   disabled={!canManageProject}
                 />
               </div>
-              <div className="flex items-center justify-between gap-4 px-5 py-4">
+              <div className="flex flex-wrap items-center justify-between gap-4 px-5 py-4">
                 <Label
                   htmlFor="playground-reranking"
                   className="text-sm font-medium"

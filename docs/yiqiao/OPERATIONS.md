@@ -40,9 +40,11 @@ powershell -ExecutionPolicy Bypass -File .\scripts\init.ps1
 ```
 
 The script copies `server/.env.example` to `server/.env` when needed, generates
-`POSTGRES_PASSWORD`, `NEO4J_PASSWORD`, and `JWT_SECRET`, creates
-`server/history`, and validates Compose. It preserves non-empty secrets and does
-not replace an existing environment file.
+`POSTGRES_PASSWORD`, `NEO4J_PASSWORD`, `JWT_SECRET`,
+`OAUTH_DEVICE_CODE_SECRET`, `OAUTH_AUDIT_HMAC_SECRET`, and
+`OAUTH_PROXY_HMAC_SECRET`, creates
+`server/history`, and validates Compose. It preserves non-empty secrets and
+does not replace an existing environment file.
 
 Treat `server/.env` as a secret. Do not commit it, attach it to an issue, or keep
 an unencrypted copy with database backups.
@@ -104,6 +106,7 @@ docker compose down
 | `DASHBOARD_PORT`         | `3000`                        | Host dashboard port                    |
 | `PUBLIC_API_URL`         | derived from `API_PORT`       | Browser-visible API URL behind a proxy |
 | `PUBLIC_DASHBOARD_URL`   | derived from `DASHBOARD_PORT` | Public dashboard origin and auth URL   |
+| `OAUTH_ISSUER`           | derived from the dashboard URL | Public connector issuer origin         |
 
 PostgreSQL and Neo4j have no host port mapping. They are attached only to the
 internal backend network. The dashboard and API listen on loopback by default.
@@ -112,6 +115,17 @@ For remote access, prefer a TLS reverse proxy or private network. Set the public
 URLs to their externally visible HTTPS values, keep the bind addresses as narrow
 as the proxy topology permits, and restart the application containers. Do not
 expose database services directly.
+
+Public connector deployments must set `OAUTH_ISSUER` and
+`PUBLIC_DASHBOARD_URL` to the same external HTTPS origin. Route discovery,
+OAuth, connector health, and the advertised memory paths through that origin;
+keep the API's internal origin private. See [Public Connector](PUBLIC_CONNECTOR.md)
+for the complete trust, token, cleanup, and audit contract.
+
+Keep `OAUTH_GATEWAY_RATE_LIMIT_CONFIRMED=false` unless the Dashboard has exactly
+one ingress gateway, that gateway replaces `X-Forwarded-For` with exactly one
+validated client IP, and it applies equivalent per-IP limits. Pass-through or
+append-only forwarding headers do not satisfy this trust boundary.
 
 ## Application Images
 
@@ -165,7 +179,7 @@ are usable.
 
 | Location                     | Contents                                                                                                   | Lifecycle                                               |
 | ---------------------------- | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
-| Compose volume `postgres_db` | Users, API keys, settings, provider overrides, request and usage records, export jobs/results, vector data | Retained by `docker compose down`; deleted by `down -v` |
+| Compose volume `postgres_db` | Users, API keys, OAuth applications/grants/audit, settings, requests, exports, and vector data                 | Retained by `docker compose down`; deleted by `down -v` |
 | Compose volume `neo4j_data`  | Graph entities and relationships                                                                           | Retained by `docker compose down`; deleted by `down -v` |
 | `server/history/`            | Memory-history SQLite, import workspaces, retained source files, and local runtime artifacts               | Host directory; back up and prune separately            |
 | `server/.env`                | Deployment settings and secrets                                                                            | Host file; preserve securely and never commit           |
@@ -261,8 +275,10 @@ Before running the block, selectively merge the encrypted secret backup into the
 replacement `.env`. Keep the newly initialized `POSTGRES_PASSWORD`, because the
 replacement PostgreSQL cluster owns that credential. Restore the source
 `NEO4J_USERNAME` and `NEO4J_PASSWORD` required by the Neo4j snapshot, plus the
-source `JWT_SECRET` and any required provider secrets. Do not copy the old
-`.env` wholesale or replace the restore checkout's bind addresses and paths.
+source `JWT_SECRET`, `OAUTH_DEVICE_CODE_SECRET`,
+`OAUTH_AUDIT_HMAC_SECRET`, `OAUTH_PROXY_HMAC_SECRET`, and any required provider
+secrets. Do not copy the old `.env` wholesale or replace the restore checkout's
+bind addresses and paths.
 Complete this merge before `create neo4j` captures its environment. For a
 side-by-side restore, set `ACTIVE_SERVER_DIR` to the live checkout. Set it to an
 empty string only when restoring on a separate host where the active checkout
@@ -569,8 +585,9 @@ and resolving the absolute paths. These files are not removed by Compose.
 - Leave telemetry disabled unless the data path and recipient are approved.
 - Keep API and dashboard binds on loopback or a private interface.
 - Terminate TLS before any remote access.
-- Rotate API keys, provider keys, database passwords, and JWT secrets after
-  suspected exposure.
+- Rotate API keys, provider keys, database passwords, JWT secrets, and OAuth
+  HMAC secrets after suspected exposure. Rotating an OAuth HMAC secret
+  invalidates pending user codes or resets audit/rate-limit hash continuity.
 - Treat database dumps, graph snapshots, history files, and request logs as
   sensitive user data.
 - Apply dependency and base-image security updates and review the SBOM.

@@ -1,3 +1,5 @@
+// This file was modified in 2026 by YiQiao contributors. See NOTICE.
+
 "use client";
 
 import Link from "next/link";
@@ -295,7 +297,7 @@ export default function DashboardPage() {
         </Popover>
 
         <div
-          className="grid h-9 grid-cols-4 rounded-md border border-memBorder-primary bg-surface-default-secondary p-0.5 sm:flex sm:self-auto"
+          className="grid h-9 w-full grid-cols-4 rounded-md border border-memBorder-primary bg-surface-default-secondary p-0.5 sm:flex sm:w-auto sm:self-auto"
           aria-label="Dashboard date range"
         >
           {[
@@ -311,7 +313,7 @@ export default function DashboardPage() {
                 applyPreset(value as Exclude<RangePreset, "custom">)
               }
               className={cn(
-                "h-8 min-w-16 rounded px-3 text-xs font-semibold text-onSurface-default-secondary transition-colors",
+                "h-8 min-w-0 rounded px-2 text-xs font-semibold text-onSurface-default-secondary transition-colors sm:min-w-16 sm:px-3",
                 preset === value
                   ? "bg-surface-default-primary text-onSurface-default-primary shadow-sm"
                   : "hover:bg-surface-default-tertiary-hover",
@@ -356,7 +358,7 @@ export default function DashboardPage() {
                 {loading ? (
                   <Skeleton className="mt-5 h-9 w-24" />
                 ) : (
-                  <p className="mt-4 text-3xl font-semibold tabular-nums">
+                  <p className="mt-4 break-words text-3xl font-semibold tabular-nums">
                     {metric.value}
                   </p>
                 )}
@@ -468,7 +470,7 @@ function ActivityChart({
   return (
     <Card className="overflow-hidden rounded-lg">
       <CardContent className="p-0">
-        <div className="flex items-center justify-between gap-4 px-5 pb-3 pt-5">
+        <div className="flex flex-wrap items-center justify-between gap-4 px-4 pb-3 pt-4 sm:px-5 sm:pt-5">
           <div className="min-w-0">
             <h3 className="text-sm font-semibold">{title}</h3>
             {loading ? (
@@ -615,7 +617,7 @@ function ActivityChart({
           )}
         </div>
 
-        <div className="flex min-h-12 items-center justify-between border-t border-memBorder-primary px-5 py-3">
+        <div className="flex min-h-12 flex-wrap items-center justify-between gap-3 border-t border-memBorder-primary px-4 py-3 sm:px-5">
           <span className="text-[11px] font-semibold uppercase text-onSurface-default-tertiary">
             {language === "zh"
               ? `${title === "Requests" ? "请求" : "实体"}总数`

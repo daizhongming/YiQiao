@@ -73,6 +73,10 @@ docs/yiqiao/MIGRATION.md
 docs/yiqiao/MIGRATION.zh-CN.md
 docs/yiqiao/OPERATIONS.md
 docs/yiqiao/OPERATIONS.zh-CN.md
+docs/yiqiao/PUBLIC_CONNECTOR.md
+docs/yiqiao/PUBLIC_CONNECTOR.zh-CN.md
+docs/yiqiao/RELEASE_0.2.0.md
+docs/yiqiao/RELEASE_0.2.0.zh-CN.md
 docs/yiqiao/README.md
 docs/yiqiao/README.zh-CN.md
 docs/yiqiao/SECURITY_AUDIT.md
@@ -89,6 +93,7 @@ scripts/check_docs_localization.py
 scripts/chat_import_artifact_compare.py
 scripts/chat_import_benchmark.py
 scripts/chat_import_quality_queries.sql
+scripts/dashboard_mock_api.py
 scripts/full_stack_smoke.py
 scripts/import_chat_history.py
 scripts/init.ps1
@@ -105,7 +110,9 @@ server/alembic/versions/014_memory_import_workspace_limits.py
 server/alembic/versions/015_repair_import_source_retry_flags.py
 server/alembic/versions/016_memory_import_storage_quota_snapshot.py
 server/alembic/versions/017_boss_helper_pairing.py
+server/alembic/versions/018_public_service_oauth.py
 server/chat_import.py
+server/connector_protocol.py
 server/.env.example.zh-CN
 server/README.zh-CN.md
 server/dashboard/.prettierignore
@@ -116,12 +123,12 @@ server/dashboard/public/fonts/FONT_LICENSES.md
 server/dashboard/public/fonts/FONT_LICENSES.zh-CN.md
 server/dashboard/public/fonts/OFL-1.1.txt
 server/dashboard/src/app/(root)/dashboard/billing/page.tsx
+server/dashboard/src/app/(root)/dashboard/connected-apps/page.test.tsx
+server/dashboard/src/app/(root)/dashboard/connected-apps/page.tsx
 server/dashboard/src/app/(root)/dashboard/entities/[type]/[id]/page.tsx
 server/dashboard/src/app/(root)/dashboard/graph/galaxy-graph.tsx
 server/dashboard/src/app/(root)/dashboard/graph/page.tsx
 server/dashboard/src/app/(root)/dashboard/install/page.tsx
-server/dashboard/src/app/(root)/dashboard/integrations/boss-helper/page.test.tsx
-server/dashboard/src/app/(root)/dashboard/integrations/boss-helper/page.tsx
 server/dashboard/src/app/(root)/dashboard/memories/memory-import-dialog.tsx
 server/dashboard/src/app/(root)/dashboard/memory-exports/page.tsx
 server/dashboard/src/app/(root)/dashboard/page.tsx
@@ -130,14 +137,31 @@ server/dashboard/src/app/(root)/dashboard/settings/settings-client.tsx
 server/dashboard/src/app/(root)/dashboard/settings/settings-cloud-client.tsx
 server/dashboard/src/app/(root)/dashboard/settings/usage-limits/page.tsx
 server/dashboard/src/app/(root)/playground/page.tsx
+server/dashboard/src/app/api/backend/[...path]/route.ts
+server/dashboard/src/app/api/backend/[...path]/route.test.ts
+server/dashboard/src/app/.well-known/oauth-authorization-server/route.ts
+server/dashboard/src/app/.well-known/service-capabilities/route.ts
 server/dashboard/src/app/icon.svg
+server/dashboard/src/app/memories/route.ts
+server/dashboard/src/app/oauth/device_authorization/route.ts
+server/dashboard/src/app/oauth/health/route.ts
+server/dashboard/src/app/oauth/revoke/route.ts
+server/dashboard/src/app/oauth/token/route.ts
+server/dashboard/src/app/search/route.ts
+server/dashboard/src/app/v1/ping/route.ts
 server/dashboard/src/components/i18n/language-toggle.tsx
 server/dashboard/src/components/requests/request-activity.tsx
 server/dashboard/src/lib/i18n.tsx
 server/dashboard/src/lib/i18n.test.ts
 server/dashboard/src/lib/language-preference.ts
+server/dashboard/src/lib/public-connector-proxy.test.ts
+server/dashboard/src/lib/public-connector-proxy.ts
+server/dashboard/src/lib/transport-peer.test.ts
 server/dashboard/src/lib/yiqiao-api-examples.test.ts
 server/dashboard/src/lib/yiqiao-api-examples.ts
+server/dashboard/src/middleware.test.ts
+server/dashboard/src/styles/yiqiao-theme.css
+server/dashboard/transport-peer.cjs
 server/dashboard/vitest.config.ts
 server/docker-compose.build.yaml
 server/docker-compose.e2e.yaml
@@ -146,15 +170,17 @@ server/import_quota.py
 server/import_repository.py
 server/init-db.sql
 server/neo4j_graph.py
+server/oauth_service.py
 server/project_scope.py
-server/routers/boss_helper.py
 server/routers/exports.py
 server/routers/graph.py
 server/routers/memories.py
+server/routers/oauth.py
 server/routers/playground.py
 server/routers/settings.py
 server/routers/usage.py
 server/routers/webhooks.py
+server/scripts/prune_oauth.py
 server/settings_store.py
 server/usage_service.py
 server/webhook_dispatcher.py
@@ -163,12 +189,11 @@ tests/conftest.py
 tests/e2e/openai_stub.py
 tests/memory/test_operation_context.py
 tests/test_auth_account_routes.py
-tests/test_boss_helper_migration.py
-tests/test_boss_helper_pairing.py
 tests/test_chat_import.py
 tests/test_chat_import_artifact_compare.py
 tests/test_chat_import_benchmark.py
 tests/test_dashboard_font_licenses.py
+tests/test_dashboard_mock_api.py
 tests/test_docs_localization.py
 tests/test_environment_isolation.py
 tests/test_exports_router.py
@@ -181,6 +206,10 @@ tests/test_neo4j_graph_memory.py
 tests/test_playground_routes.py
 tests/test_public_api.py
 tests/test_public_branding_surfaces.py
+tests/test_public_service_oauth.py
+tests/test_public_service_oauth_migration.py
+tests/test_public_service_oauth_postgres.py
+tests/test_public_service_oauth_routes.py
 tests/test_release_legal_payload.py
 tests/test_requests_entities_routes.py
 tests/test_server_configuration.py
@@ -582,6 +611,8 @@ def _manifest_for_write(path: Path, expected: bytes) -> bytes:
 
 def manifest_content(paths: list[Path]) -> bytes:
     path_digest = hashlib.sha256("\n".join(path.as_posix() for path in paths).encode()).hexdigest()
+    originated_paths = sorted(YIQIAO_ORIGINATED_PATHS)
+    originated_digest = hashlib.sha256("\n".join(originated_paths).encode()).hexdigest()
     labels = {
         "css": "CSS comment",
         "hash": "source comment",
@@ -616,6 +647,10 @@ def manifest_content(paths: list[Path]) -> bytes:
         f"Modified upstream files: **{len(paths)}**",
         "",
         f"Path-list SHA-256: `{path_digest.upper()}`",
+        "",
+        f"YiQiao-originated files: **{len(originated_paths)}**",
+        "",
+        f"Originated path-list SHA-256: `{originated_digest.upper()}`",
         "",
         "## Files",
         "",

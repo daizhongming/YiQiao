@@ -22,6 +22,7 @@ const nextConfig = {
     optimizePackageImports: ["@/components", "@/lib", "@/utils"],
   },
   compress: true,
+  skipTrailingSlashRedirect: true,
   images: {
     formats: ["image/webp", "image/avif"],
   },

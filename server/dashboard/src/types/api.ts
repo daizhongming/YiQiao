@@ -33,6 +33,82 @@ export interface ApiKeyCreateResponse {
   created_at: string;
 }
 
+export interface OAuthDeviceRequest {
+  id: string;
+  client_id: string;
+  application_name: string;
+  audience: string;
+  requested_scopes: string[];
+  approved_scopes: string[];
+  status: string;
+  project_id: string | null;
+  expires_at: string;
+  created_at: string;
+}
+
+export interface OAuthGrantSummary {
+  id: string;
+  client_id: string;
+  application_name: string;
+  audience: string;
+  scopes: string[];
+  project_id: string;
+  status: string;
+  access_expires_at: string;
+  refresh_expires_at: string;
+  last_used_at: string | null;
+  created_at: string;
+  revoked_at: string | null;
+  is_owner: boolean;
+  owner_email?: string | null;
+}
+
+export interface OAuthAuditEventSummary {
+  id: string;
+  event_type: string;
+  outcome: string;
+  client_id: string;
+  application_name: string;
+  grant_id: string | null;
+  project_id: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface OAuthGrantListResponse {
+  items: OAuthGrantSummary[];
+  audit_events: OAuthAuditEventSummary[];
+  can_manage_project: boolean;
+}
+
+export interface OAuthApplicationSummary {
+  client_id: string;
+  display_name: string;
+  client_type: "public";
+  allowed_audiences: string[];
+  allowed_scopes: string[];
+  operator_metadata: Record<string, unknown>;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  last_used_at: string | null;
+  revoked_at: string | null;
+}
+
+export interface OAuthApplicationListResponse {
+  items: OAuthApplicationSummary[];
+  can_register: boolean;
+}
+
+export interface OAuthApplicationCreate {
+  client_id: string;
+  display_name: string;
+  client_type: "public";
+  allowed_audiences: string[];
+  allowed_scopes: string[];
+  operator_metadata?: Record<string, string>;
+}
+
 export interface ApiRequestLog {
   id: string;
   created_at: string;

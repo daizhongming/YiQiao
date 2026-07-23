@@ -688,14 +688,14 @@ export default function MemoriesPage() {
               align="end"
               className="w-[min(calc(100vw-32px),620px)] p-0"
             >
-              <div className="flex items-center justify-between border-b border-memBorder-primary px-4 py-3">
-                <div>
+              <div className="flex items-start justify-between gap-3 border-b border-memBorder-primary px-3 py-3 sm:px-4">
+                <div className="min-w-0">
                   <p className="text-sm font-semibold">Filter memories</p>
                   <p className="text-xs text-onSurface-default-tertiary">
                     Match {draftMatchMode} conditions
                   </p>
                 </div>
-                <div className="grid grid-cols-2 rounded-md border border-memBorder-primary bg-surface-default-secondary p-0.5">
+                <div className="grid shrink-0 grid-cols-2 rounded-md border border-memBorder-primary bg-surface-default-secondary p-0.5">
                   {(["all", "any"] as MatchMode[]).map((mode) => (
                     <button
                       key={mode}
@@ -712,7 +712,7 @@ export default function MemoriesPage() {
                   ))}
                 </div>
               </div>
-              <div className="max-h-[360px] space-y-2 overflow-y-auto p-4">
+              <div className="max-h-[360px] space-y-2 overflow-y-auto p-3 sm:p-4">
                 {draftFilters.length === 0 ? (
                   <div className="rounded-md border border-dashed border-memBorder-primary px-4 py-8 text-center text-xs text-onSurface-default-tertiary">
                     No filter conditions
@@ -819,7 +819,7 @@ export default function MemoriesPage() {
                   Add filter
                 </Button>
               </div>
-              <div className="flex items-center justify-between border-t border-memBorder-primary px-4 py-3">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-memBorder-primary px-3 py-3 sm:px-4">
                 <Button
                   variant="ghost"
                   size="sm"
@@ -828,7 +828,7 @@ export default function MemoriesPage() {
                 >
                   Clear all
                 </Button>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap justify-end gap-2">
                   <Button
                     variant="outline"
                     size="sm"
@@ -894,7 +894,7 @@ export default function MemoriesPage() {
         >
           <div
             role="row"
-            className="grid h-[38px] grid-cols-[86px_minmax(0,1fr)_42px] items-center border-b border-memBorder-primary bg-surface-default-fg-secondary px-2 text-xs text-onSurface-default-secondary md:grid-cols-[155px_minmax(150px,1fr)_minmax(240px,1.55fr)_minmax(155px,.9fr)_48px] md:px-0"
+            className="grid h-[38px] grid-cols-[86px_minmax(0,1fr)_42px] items-center border-b border-memBorder-primary bg-surface-default-fg-secondary px-2 text-xs text-onSurface-default-secondary lg:grid-cols-[155px_minmax(150px,1fr)_minmax(240px,1.55fr)_minmax(155px,.9fr)_48px] lg:px-0"
           >
             <div role="columnheader" className="flex items-center gap-2 px-2">
               <Clock3 className="size-3.5" />
@@ -902,21 +902,21 @@ export default function MemoriesPage() {
             </div>
             <div
               role="columnheader"
-              className="hidden items-center gap-2 border-l border-memBorder-primary px-4 md:flex"
+              className="hidden items-center gap-2 border-l border-memBorder-primary px-4 lg:flex"
             >
               <UserRound className="size-3.5" />
               Entities
             </div>
             <div
               role="columnheader"
-              className="flex items-center gap-2 px-2 md:border-l md:border-memBorder-primary md:px-4"
+              className="flex items-center gap-2 px-2 lg:border-l lg:border-memBorder-primary lg:px-4"
             >
               <MessageSquareText className="size-3.5" />
               Memory Content
             </div>
             <div
               role="columnheader"
-              className="hidden items-center gap-2 border-l border-memBorder-primary px-4 md:flex"
+              className="hidden items-center gap-2 border-l border-memBorder-primary px-4 lg:flex"
             >
               <Tag className="size-3.5" />
               Categories
@@ -939,7 +939,7 @@ export default function MemoriesPage() {
                 }
               }}
               className={cn(
-                "grid min-h-[41px] cursor-pointer grid-cols-[86px_minmax(0,1fr)_42px] items-center border-b border-memBorder-primary px-2 text-xs last:border-b-0 hover:bg-surface-default-primary-hover md:grid-cols-[155px_minmax(150px,1fr)_minmax(240px,1.55fr)_minmax(155px,.9fr)_48px] md:px-0",
+                "grid min-h-[41px] cursor-pointer grid-cols-[86px_minmax(0,1fr)_42px] items-center border-b border-memBorder-primary px-2 text-xs last:border-b-0 hover:bg-surface-default-primary-hover lg:grid-cols-[155px_minmax(150px,1fr)_minmax(240px,1.55fr)_minmax(155px,.9fr)_48px] lg:px-0",
                 selectedMemory?.id === memory.id &&
                   "bg-surface-default-tertiary",
               )}
@@ -950,17 +950,17 @@ export default function MemoriesPage() {
               >
                 {formatRelativeTime(memory.created_at, dateLocale, language)}
               </div>
-              <div role="cell" className="hidden min-w-0 px-4 md:block">
+              <div role="cell" className="hidden min-w-0 px-4 lg:block">
                 <EntityPills memory={memory} />
               </div>
-              <div role="cell" className="min-w-0 px-2 md:px-4">
+              <div role="cell" className="min-w-0 px-2 lg:px-4">
                 <p className="truncate text-sm text-onSurface-default-primary">
                   {memory.memory || "--"}
                 </p>
               </div>
               <div
                 role="cell"
-                className="hidden min-w-0 items-center gap-1.5 px-4 md:flex"
+                className="hidden min-w-0 items-center gap-1.5 px-4 lg:flex"
               >
                 {memory.categories?.[0] ? (
                   <>

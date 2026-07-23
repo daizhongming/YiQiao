@@ -1,6 +1,7 @@
 // This file was modified in 2026 by YiQiao contributors. See NOTICE.
 
 import "@/styles/globals.css";
+import "@/styles/yiqiao-theme.css";
 import { cookies } from "next/headers";
 import { Inter, Fustat, Roboto, DMMono, InterDisplay } from "../(root)/fonts";
 import { cn } from "@/lib/utils";
@@ -33,6 +34,7 @@ export default async function SetupLayout({
   return (
     <html
       lang={initialLanguage === "zh" ? "zh-CN" : "en"}
+      data-brand-theme="yiqiao"
       className={cn(
         Fustat.variable,
         InterDisplay.variable,
@@ -48,7 +50,8 @@ export default async function SetupLayout({
           <AuthProvider>
             <ThemeProvider
               attribute="class"
-              defaultTheme="light"
+              defaultTheme="system"
+              enableSystem
               disableTransitionOnChange
             >
               {children}

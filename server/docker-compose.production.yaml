@@ -5,6 +5,8 @@ services:
     pull_policy: always
     environment:
       AUTH_DISABLED: "false"
+      OAUTH_ALLOW_INSECURE_LOOPBACK: "false"
+      OAUTH_ISSUER: ${OAUTH_ISSUER:?Set OAUTH_ISSUER to the public HTTPS Dashboard origin}
     security_opt:
       - no-new-privileges:true
     cap_drop:

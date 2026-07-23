@@ -1,3 +1,5 @@
+// This file was modified in 2026 by YiQiao contributors. See NOTICE.
+
 import * as React from "react";
 import { Slot } from "@radix-ui/react-slot";
 import { cva, type VariantProps } from "class-variance-authority";
@@ -5,15 +7,15 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 font-fustat font-semibold",
+  "inline-flex items-center justify-center whitespace-nowrap rounded-md font-fustat text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 motion-reduce:transition-none",
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground  hover:bg-primary/90",
+        default: "bg-primary text-primary-foreground hover:bg-primary/90",
         destructive:
           "bg-onSurface-danger-primary hover:bg-onSurface-danger-secondary dark:bg-onSurface-danger-secondary dark:hover:bg-onSurface-danger-primary text-white",
         outline:
-          "border border-memBorder-primary bg-surface-default-primary hover:bg-neutral-100 hover:text-neutral-800",
+          "border border-memBorder-primary bg-surface-default-primary text-onSurface-default-primary hover:bg-surface-default-primary-hover",
         secondary:
           "bg-surface-default-fg-secondary text-onSurface-default-primary hover:bg-surface-default-fg-secondary-hover border border-memBorder-primary",
         ghost: "hover:bg-accent/30 hover:text-accent-foreground",
@@ -28,7 +30,7 @@ const buttonVariants = cva(
         surfacePrimary:
           "bg-surface-default-primary text-onSurface-default-primary hover:bg-surface-default-primary-hover",
         transparent:
-          "bg-transparent text-onSurface-default-primary hover:bg-transparent/80 hover:text-white",
+          "bg-transparent text-onSurface-default-primary hover:bg-surface-default-secondary",
         subtle:
           "bg-transparent text-onSurface-default-primary hover:bg-surface-default-fg-secondary-hover border-0",
         brand:

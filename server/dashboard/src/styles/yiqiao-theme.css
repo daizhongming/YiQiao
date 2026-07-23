@@ -1,0 +1,244 @@
+/* This file was modified in 2026 by YiQiao contributors. See NOTICE. */
+
+/* YiQiao's brand layer is intentionally additive and removable. */
+
+html[data-brand-theme="yiqiao"] {
+  color-scheme: light;
+
+  --yiqiao-paper: #faf8f5;
+  --yiqiao-paper-deep: #f0ece6;
+  --yiqiao-paper-raised: #fffdf9;
+  --yiqiao-ink: #1a1714;
+  --yiqiao-ink-secondary: #625c56;
+  --yiqiao-ink-muted: #8a837c;
+  --yiqiao-gold: #c47d3e;
+  --yiqiao-gold-deep: #a0622e;
+  --yiqiao-border: #e8e2d8;
+  --yiqiao-border-strong: #d4c0a4;
+  --yiqiao-shadow-sm: 0 1px 3px rgba(26, 23, 20, 0.04);
+  --yiqiao-shadow-md: 0 4px 16px rgba(26, 23, 20, 0.06);
+  --yiqiao-shadow-lg: 0 12px 40px rgba(26, 23, 20, 0.08);
+  --yiqiao-font-display:
+    var(--font-fustat), var(--font-inter), ui-serif, Georgia, serif;
+  --yiqiao-font-body:
+    var(--font-fustat), var(--font-inter), system-ui, sans-serif;
+  --yiqiao-font-mono:
+    var(--font-dm-mono), var(--font-roboto-mono), Consolas, monospace;
+
+  --background: 38 33% 97%;
+  --foreground: 30 15% 8%;
+  --card: 38 60% 99%;
+  --card-foreground: 30 15% 8%;
+  --popover: 38 60% 99%;
+  --popover-foreground: 30 15% 8%;
+  --primary: 30 35% 22%;
+  --primary-foreground: 38 60% 98%;
+  --secondary: 38 28% 92%;
+  --secondary-foreground: 30 15% 8%;
+  --muted: 38 24% 92%;
+  --muted-foreground: 30 10% 42%;
+  --accent: 38 55% 93%;
+  --accent-foreground: 30 35% 22%;
+  --border: 38 24% 85%;
+  --input: 38 24% 85%;
+  --ring: 32 50% 50%;
+  --radius: 0.5rem;
+
+  --mem-neutral-50: #fffdf9;
+  --mem-neutral-100: #faf8f5;
+  --mem-neutral-150: #f4f0ea;
+  --mem-neutral-200: #e8e2d8;
+  --mem-neutral-300: #d4c9bb;
+  --mem-neutral-400: #b8aea3;
+  --mem-neutral-450: #91887f;
+  --mem-neutral-500: #746d66;
+  --mem-neutral-550: #625c56;
+  --mem-neutral-600: #4f4943;
+  --mem-neutral-700: #352f2a;
+  --mem-neutral-800: #2c2520;
+  --mem-neutral-850: #211c18;
+  --mem-neutral-900: #1a1714;
+  --mem-neutral-950: #100e0c;
+
+  --mem-border-primary: var(--yiqiao-border);
+  --mem-border-secondary: var(--yiqiao-border-strong);
+  --surface-default-primary: var(--yiqiao-paper-raised);
+  --surface-default-primary-hover: #faf6ef;
+  --surface-default-secondary: var(--yiqiao-paper);
+  --surface-default-secondary-hover: var(--yiqiao-paper-deep);
+  --surface-default-fg-secondary: #f4f0ea;
+  --surface-default-fg-secondary-hover: #ece5da;
+  --surface-default-tertiary: var(--yiqiao-paper-deep);
+  --surface-default-tertiary-hover: #e8e2d8;
+  --surface-default-brand: var(--mem-gold-100);
+  --surface-default-brand-hover: var(--mem-gold-200);
+  --on-surface-default-primary: var(--yiqiao-ink);
+  --on-surface-default-secondary: var(--yiqiao-ink-secondary);
+  --on-surface-default-tertiary: var(--yiqiao-ink-muted);
+  --on-surface-default-brand: var(--mem-gold-800);
+  --on-surface-default-brand-hover: var(--mem-gold-900);
+
+  /* These aliases document the semantic colors that the brand layer preserves. */
+  --yiqiao-semantic-success: var(--on-surface-positive-primary);
+  --yiqiao-semantic-warning: var(--mem-gold-700);
+  --yiqiao-semantic-error: var(--on-surface-danger-primary);
+  --yiqiao-semantic-info: var(--on-surface-info-primary);
+  --yiqiao-semantic-request-add: var(--on-surface-event-add);
+  --yiqiao-semantic-request-search: var(--on-surface-event-search);
+  --yiqiao-semantic-request-delete: var(--on-surface-event-delete);
+  --yiqiao-semantic-request-get: var(--on-surface-event-get);
+  --yiqiao-semantic-graph: var(--mem-blue-600);
+}
+
+html[data-brand-theme="yiqiao"].dark {
+  color-scheme: dark;
+
+  --yiqiao-paper: #0a0a0a;
+  --yiqiao-paper-deep: #050505;
+  --yiqiao-paper-raised: #0f0f0f;
+  --yiqiao-ink: #fcfcfc;
+  --yiqiao-ink-secondary: #b3b3b3;
+  --yiqiao-ink-muted: #737373;
+  --yiqiao-border: #181818;
+  --yiqiao-border-strong: #252525;
+  --yiqiao-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.25);
+  --yiqiao-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.3);
+  --yiqiao-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.35);
+
+  /* Preserve the established Dashboard dark palette and semantic mappings. */
+  --background: 0 0% 11%;
+  --foreground: 0 0% 88%;
+  --card: 0 0% 11%;
+  --card-foreground: 0 0% 88%;
+  --popover: 0 0% 11%;
+  --popover-foreground: 0 0% 98%;
+  --primary: 0 0% 98%;
+  --primary-foreground: 240 5.9% 10%;
+  --secondary: 240 3.7% 15.9%;
+  --secondary-foreground: 0 0% 98%;
+  --muted: 240 3.7% 18.9%;
+  --muted-foreground: 240 5% 64.9%;
+  --accent: 240 10% 4%;
+  --accent-foreground: 0 0% 98%;
+  --border: 240 3.7% 15.9%;
+  --input: 240 3.7% 15.9%;
+  --ring: 240 4.9% 83.9%;
+  --mem-neutral-50: #fcfcfc;
+  --mem-neutral-100: #f4f4f4;
+  --mem-neutral-150: #e9e9e9;
+  --mem-neutral-200: #dddddd;
+  --mem-neutral-300: #cccccc;
+  --mem-neutral-400: #b3b3b3;
+  --mem-neutral-450: #999999;
+  --mem-neutral-500: #737373;
+  --mem-neutral-550: #555555;
+  --mem-neutral-600: #383838;
+  --mem-neutral-700: #252525;
+  --mem-neutral-800: #181818;
+  --mem-neutral-850: #0f0f0f;
+  --mem-neutral-900: #0a0a0a;
+  --mem-neutral-950: #050505;
+  --mem-border-primary: var(--mem-neutral-800);
+  --mem-border-secondary: var(--mem-neutral-700);
+  --surface-default-primary: var(--mem-neutral-850);
+  --surface-default-primary-hover: var(--mem-neutral-800);
+  --surface-default-secondary: var(--mem-neutral-950);
+  --surface-default-secondary-hover: var(--mem-neutral-900);
+  --surface-default-fg-secondary: var(--mem-neutral-800);
+  --surface-default-fg-secondary-hover: var(--mem-neutral-700);
+  --surface-default-tertiary: var(--mem-neutral-700);
+  --surface-default-tertiary-hover: var(--mem-neutral-600);
+  --surface-default-brand: var(--mem-purple-950);
+  --surface-default-brand-hover: var(--mem-purple-900);
+  --on-surface-default-primary: var(--mem-neutral-50);
+  --on-surface-default-secondary: var(--mem-neutral-400);
+  --on-surface-default-tertiary: var(--mem-neutral-500);
+  --on-surface-default-brand: var(--mem-purple-400);
+  --on-surface-default-brand-hover: var(--mem-purple-700);
+  --surface-event-add: var(--mem-green-950);
+  --surface-event-search: var(--mem-blue-900);
+  --surface-event-delete: var(--mem-red-900);
+  --surface-event-get: var(--mem-purple-950);
+  --surface-positive-primary: var(--mem-green-950);
+  --surface-positive-primary-hover: var(--mem-green-900);
+  --surface-danger-primary: var(--mem-red-950);
+  --surface-danger-primary-hover: var(--mem-red-900);
+  --surface-info-primary: var(--mem-blue-950);
+  --surface-info-primary-hover: var(--mem-blue-900);
+  --on-surface-event-add: var(--mem-green-600);
+  --on-surface-event-search: var(--mem-blue-400);
+  --on-surface-event-delete: var(--mem-red-400);
+  --on-surface-event-get: var(--mem-purple-500);
+  --on-surface-positive-primary: var(--mem-green-600);
+  --on-surface-positive-secondary: var(--mem-green-700);
+  --on-surface-danger-primary: var(--mem-red-400);
+  --on-surface-danger-secondary: var(--mem-red-600);
+  --on-surface-info-primary: var(--mem-blue-400);
+  --on-surface-info-secondary: var(--mem-blue-600);
+}
+
+html[data-brand-theme="yiqiao"] body {
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: var(--yiqiao-font-body);
+}
+
+html[data-brand-theme="yiqiao"] :where(h1, h2, h3) {
+  letter-spacing: 0;
+}
+
+.yiqiao-display {
+  font-family: var(--yiqiao-font-display);
+}
+
+.dashboard-shell {
+  min-height: 100dvh;
+  padding-top: 3.5rem;
+}
+
+.dashboard-main {
+  height: calc(100dvh - 3.5rem);
+  min-width: 0;
+  overflow: hidden;
+  border-top: 1px solid var(--mem-border-primary);
+  background: var(--surface-default-primary);
+  transition:
+    margin-left 200ms ease,
+    width 200ms ease;
+}
+
+.dashboard-desktop-sidebar {
+  display: none;
+}
+
+.dashboard-topbar {
+  left: 0;
+  width: 100%;
+}
+
+@media (min-width: 768px) {
+  .dashboard-main {
+    width: calc(100% - var(--dashboard-sidebar-width));
+    margin-left: var(--dashboard-sidebar-width);
+    border-left: 1px solid var(--mem-border-primary);
+    border-top-left-radius: var(--radius);
+  }
+
+  .dashboard-desktop-sidebar {
+    display: flex;
+    width: var(--dashboard-sidebar-width);
+  }
+
+  .dashboard-topbar {
+    left: var(--dashboard-sidebar-width);
+    width: calc(100% - var(--dashboard-sidebar-width));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-main,
+  .dashboard-desktop-sidebar,
+  .dashboard-topbar {
+    transition-duration: 0.01ms !important;
+  }
+}

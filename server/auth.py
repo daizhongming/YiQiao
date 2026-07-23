@@ -34,15 +34,6 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 30
 REFRESH_TOKEN_EXPIRE_DAYS = 30
 ADMIN_API_KEY = os.environ.get("ADMIN_API_KEY", "")
 AUTH_DISABLED = os.environ.get("AUTH_DISABLED", "").lower() in {"1", "true", "yes", "on"}
-BOSS_HELPER_KEY_TYPE = "boss_helper"
-BOSS_HELPER_SCOPES = frozenset({"memory:read", "memory:write", "ping"})
-_BOSS_HELPER_ROUTE_SCOPES = {
-    ("POST", "/memories"): "memory:write",
-    ("POST", "/search"): "memory:read",
-    ("GET", "/v1/ping"): "ping",
-    ("POST", "/v3/memories/add"): "memory:write",
-    ("POST", "/v3/memories/search"): "memory:read",
-}
 _API_KEY_CACHE_LIMIT = 1024
 _api_key_cache: OrderedDict[str, uuid.UUID] = OrderedDict()
 _api_key_cache_lock = threading.RLock()
@@ -199,6 +190,9 @@ def _resolve_user_from_jwt(token: str, db: Session) -> User:
 
 def _validate_api_key(candidate: APIKey, request: Request, db: Session) -> User:
     now = datetime.now(timezone.utc)
+    if candidate.key_type != "standard":
+        invalidate_api_key_auth_cache(candidate.id)
+        raise _credential_error(401, "unsupported_key_type", "This API key type is not supported.")
     if candidate.revoked_at is not None:
         invalidate_api_key_auth_cache(candidate.id)
         raise _credential_error(401, "key_revoked", "API key has been revoked.")
@@ -212,17 +206,6 @@ def _validate_api_key(candidate: APIKey, request: Request, db: Session) -> User:
     explicit_project = request.headers.get(PROJECT_HEADER) or request.query_params.get("project_id")
     if explicit_project is not None and normalize_project_id(explicit_project) != candidate.project_id:
         raise _credential_error(403, "project_scope_mismatch", "API key is bound to a different project.")
-
-    if candidate.key_type == BOSS_HELPER_KEY_TYPE:
-        path = request.url.path.rstrip("/") or "/"
-        required_scope = _BOSS_HELPER_ROUTE_SCOPES.get((request.method.upper(), path))
-        scopes = set(candidate.scopes or [])
-        if required_scope is None or required_scope not in scopes or not scopes.issubset(BOSS_HELPER_SCOPES):
-            raise _credential_error(
-                403,
-                "insufficient_scope",
-                "BossHelper API keys may only write memories, search memories, and ping.",
-            )
 
     request.state.project_id = candidate.project_id
     request.state.api_key_id = str(candidate.id)
@@ -312,6 +295,36 @@ async def verify_auth(
         return _finalize_auth(request, _resolve_user_from_api_key(token_key, request, db), db)
 
     if credentials is not None:
+        if credentials.credentials.startswith("yqoa_"):
+            request.state.suppress_request_log = True
+            _mark_auth_type(request, "oauth")
+            from oauth_service import OAuthProtocolError, authorize_resource_request
+
+            try:
+                authorization = await authorize_resource_request(
+                    db,
+                    token=credentials.credentials,
+                    request=request,
+                )
+            except OAuthProtocolError as exc:
+                from errors import request_id_var
+
+                raise HTTPException(
+                    status_code=exc.status_code,
+                    detail={
+                        "code": "oauth_service_unavailable",
+                        "message": "OAuth authorization is temporarily unavailable.",
+                        "request_id": request_id_var.get(),
+                    },
+                ) from exc
+            request.state.project_id = authorization.project_id
+            request.state.oauth_grant_id = str(authorization.grant_id)
+            request.state.oauth_access_token_hash = authorization.access_token_hash
+            request.state.oauth_audit_context = authorization.audit_context
+            request.state.oauth_client_id = authorization.client_id
+            request.state.oauth_audience = authorization.audience
+            request.state.oauth_scopes = list(authorization.scopes)
+            return _finalize_auth(request, authorization.user, db)
         _mark_auth_type(request, "bearer")
         return _finalize_auth(request, _resolve_user_from_jwt(credentials.credentials, db), db)
 

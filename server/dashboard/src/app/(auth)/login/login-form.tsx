@@ -80,27 +80,30 @@ export default function LoginForm() {
   };
 
   return (
-    <div className="flex min-h-screen bg-surface-default-secondary">
-      <div className="fixed right-4 top-4 z-20">
+    <div className="flex min-h-[100dvh] bg-surface-default-secondary">
+      <div className="fixed right-3 top-3 z-20 sm:right-4 sm:top-4">
         <LanguageToggle compact />
       </div>
-      <div className="flex w-full items-center justify-center p-6 sm:p-8">
+      <div className="flex w-full items-center justify-center px-3 pb-6 pt-16 sm:p-8">
         <div className="w-full max-w-md">
-          <div className="flex justify-center mb-2">
+          <div className="mb-2 flex justify-center">
             {mounted && (
               <Image src="/favicon.svg" alt="YiQiao" width={41} height={41} />
             )}
           </div>
-          <h1 className="text-2xl font-semibold text-onSurface-default-primary text-center mb-6 font-fustat">
+          <h1 className="mb-6 text-center font-fustat text-2xl font-semibold text-onSurface-default-primary">
             {t(
               isRegisteringInvite
                 ? "Create invited account"
                 : "Sign in to YiQiao",
             )}
           </h1>
-          <div className="flex flex-col gap-4 rounded-lg border border-memBorder-primary bg-surface-default-primary p-6 sm:p-8">
+          <div className="flex flex-col gap-4 rounded-lg border border-memBorder-primary bg-surface-default-primary p-5 shadow-[var(--yiqiao-shadow-sm)] sm:p-8">
             {error && (
-              <p className="text-sm text-onSurface-danger-primary bg-surface-danger-primary px-3 py-2 rounded">
+              <p
+                role="alert"
+                className="rounded-md bg-surface-danger-primary px-3 py-2 text-sm text-onSurface-danger-primary"
+              >
                 {t(error)}
               </p>
             )}
@@ -176,7 +179,7 @@ export default function LoginForm() {
                 setError("");
                 setIsRegisteringInvite((value) => !value);
               }}
-              className="text-xs text-onSurface-default-tertiary hover:text-onSurface-default-primary underline underline-offset-4 self-center"
+              className="self-center rounded-sm text-xs text-onSurface-default-tertiary underline underline-offset-4 hover:text-onSurface-default-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               {t(
                 isRegisteringInvite
@@ -188,7 +191,7 @@ export default function LoginForm() {
               <DialogTrigger asChild>
                 <button
                   type="button"
-                  className="text-xs text-onSurface-default-tertiary hover:text-onSurface-default-primary underline underline-offset-4 self-center"
+                  className="self-center rounded-sm text-xs text-onSurface-default-tertiary underline underline-offset-4 hover:text-onSurface-default-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   {t("Forgot password?")}
                 </button>
@@ -202,11 +205,11 @@ export default function LoginForm() {
                     )}
                   </DialogDescription>
                 </DialogHeader>
-                <div className="flex gap-2">
+                <div className="flex flex-col gap-2 sm:flex-row">
                   <Input
                     readOnly
                     value={RESET_COMMAND}
-                    className="font-mono text-xs"
+                    className="min-w-0 flex-1 font-mono text-xs"
                   />
                   <CopyToClipboard
                     text={RESET_COMMAND}
@@ -218,6 +221,7 @@ export default function LoginForm() {
                     <Button
                       variant="outline"
                       size="icon"
+                      className="shrink-0 self-end sm:self-auto"
                       aria-label={t(copied ? "Copied" : "Copy reset command")}
                       title={t(copied ? "Copied" : "Copy reset command")}
                     >
