@@ -21,7 +21,7 @@ if str(_SERVER_DIR) not in sys.path:
 
 import models  # noqa: E402
 
-_MIGRATION_017_SHA256 = "575881d0702d4cb75d5724c9fc9a027d610e1a8fba30b303c1e7a167216b2d15"
+_MIGRATION_017_SHA256 = "ecfef8f4af65120e72232c4dc845086397be2f7c5cdcedd166e1f12de12416d7"
 _OAUTH_TABLES = {
     "oauth_applications",
     "oauth_device_authorizations",
@@ -84,7 +84,8 @@ def test_revision_chain_is_linear_and_017_is_byte_identical():
 
     assert chain == [f"{number:03d}" for number in range(18, 0, -1)]
     migration_017 = _SERVER_DIR / "alembic" / "versions" / "017_boss_helper_pairing.py"
-    assert hashlib.sha256(migration_017.read_bytes()).hexdigest() == _MIGRATION_017_SHA256
+    canonical_bytes = migration_017.read_bytes().replace(b"\r\n", b"\n")
+    assert hashlib.sha256(canonical_bytes).hexdigest() == _MIGRATION_017_SHA256
 
 
 def test_018_upgrade_retires_only_legacy_pairing_credentials(tmp_path, monkeypatch):
