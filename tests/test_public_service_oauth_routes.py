@@ -1314,6 +1314,56 @@ def test_management_visibility_and_revocation(oauth_app):
     assert revoked.json()["status"] == "revoked"
 
 
+def test_project_owner_can_manage_another_users_grant(oauth_app):
+    _started, _credential = _authorize(
+        oauth_app,
+        CLIENTS[0][0],
+        dashboard_token=oauth_app.editor_token,
+    )
+    owner_id = uuid.uuid4()
+    with oauth_app.sessions() as db:
+        db.add(
+            User(
+                id=owner_id,
+                name="Project Owner",
+                email="owner@example.com",
+                password_hash="unused",
+                role="member",
+            )
+        )
+        db.commit()
+
+    _set_workspace(
+        oauth_app,
+        lambda workspace: workspace["members"].append(
+            {
+                "email": "owner@example.com",
+                "role": "OWNER",
+                "status": "active",
+                "project_id": DEFAULT_PROJECT_ID,
+                "organization_id": DEFAULT_ORG_ID,
+            }
+        ),
+    )
+    owner_token = auth.create_access_token(str(owner_id), "member")
+    owner_grants = oauth_app.client.get(
+        "/oauth/grants",
+        headers=_dashboard_headers(owner_token),
+    )
+    assert owner_grants.status_code == 200
+    assert owner_grants.json()["can_manage_project"] is True
+    item = owner_grants.json()["items"][0]
+    assert item["owner_email"] == "editor@example.com"
+    assert item["is_owner"] is False
+
+    revoked = oauth_app.client.post(
+        f"/oauth/grants/{item['id']}/revoke",
+        headers=_dashboard_headers(owner_token),
+    )
+    assert revoked.status_code == 200
+    assert revoked.json()["status"] == "revoked"
+
+
 def test_nonstandard_api_keys_fail_closed_and_jwt_still_works(oauth_app):
     standard_key, standard_prefix, standard_hash = auth.generate_api_key()
     unknown_key, unknown_prefix, unknown_hash = auth.generate_api_key()
