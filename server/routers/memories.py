@@ -8,7 +8,6 @@ from typing import Any, Literal
 from auth import require_project_read, require_project_write
 from db import SessionLocal, get_db
 from fastapi import APIRouter, Depends, HTTPException, Request
-from mem0.memory.main import _normalize_memory_text
 from models import Settings
 from neo4j_graph import delete_memory as delete_graph_memory
 from neo4j_graph import upsert_memory as upsert_graph_memory
@@ -19,6 +18,8 @@ from server_state import ProviderConfigurationRequiredError, get_memory_instance
 from settings_store import get_json, set_json
 from sqlalchemy.orm import Session
 from webhook_dispatcher import queue_webhook_event
+
+from mem0.memory.main import _normalize_memory_text
 
 router = APIRouter(prefix="/memories", tags=["memories"])
 
