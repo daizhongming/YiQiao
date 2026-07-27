@@ -2,7 +2,7 @@
 
 [简体中文](DOCUMENTATION_COVERAGE.zh-CN.md) | **English**
 
-Last reviewed: 2026-07-22
+Last reviewed: 2026-07-27
 
 This inventory is the authoritative scope for YiQiao's public English and
 Simplified Chinese documentation. English sources remain normative. A `pass`
@@ -38,6 +38,7 @@ Kinds and policies:
 | `docs/yiqiao/OPERATIONS.md` | `docs/yiqiao/OPERATIONS.zh-CN.md` | `markdown` | `required` | `required` | `complete` | `pass` |
 | `docs/yiqiao/PUBLIC_CONNECTOR.md` | `docs/yiqiao/PUBLIC_CONNECTOR.zh-CN.md` | `markdown` | `required` | `required` | `complete` | `pass` |
 | `docs/yiqiao/RELEASE_0.2.0.md` | `docs/yiqiao/RELEASE_0.2.0.zh-CN.md` | `markdown` | `required` | `required` | `complete` | `pass` |
+| `docs/yiqiao/RELEASE_0.2.1.md` | `docs/yiqiao/RELEASE_0.2.1.zh-CN.md` | `markdown` | `required` | `required` | `complete` | `pass` |
 | `docs/yiqiao/SECURITY_AUDIT.md` | `docs/yiqiao/SECURITY_AUDIT.zh-CN.md` | `markdown` | `required` | `required` | `complete` | `pass` |
 | `docs/yiqiao/TROUBLESHOOTING.md` | `docs/yiqiao/TROUBLESHOOTING.zh-CN.md` | `markdown` | `required` | `required` | `complete` | `pass` |
 | `docs/yiqiao/DOCUMENTATION_COVERAGE.md` | `docs/yiqiao/DOCUMENTATION_COVERAGE.zh-CN.md` | `markdown` | `required` | `required` | `complete` | `pass` |

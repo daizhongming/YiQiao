@@ -570,7 +570,7 @@ app = FastAPI(
         "Authentication supports Bearer JWT, project API keys via `X-API-Key`, "
         "and the `ADMIN_API_KEY` environment variable."
     ),
-    version="0.2.0",
+    version="0.2.1",
     redirect_slashes=False,
 )
 app.state.limiter = limiter

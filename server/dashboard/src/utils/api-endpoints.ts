@@ -14,6 +14,7 @@ export const AUTH_ENDPOINTS = {
 export const MEMORY_ENDPOINTS = {
   BASE: "/memories",
   QUERY: "/memories/query",
+  DEDUPLICATE: "/memories/deduplicate",
   BY_ID: (memoryId: string) => `/memories/${memoryId}`,
   DETAILS: (memoryId: string) => `/memories/${memoryId}/details`,
   FEEDBACK: (memoryId: string) => `/memories/${memoryId}/feedback`,

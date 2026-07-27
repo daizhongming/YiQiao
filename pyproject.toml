@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "yiqiao-memory"
-version = "0.2.0"
+version = "0.2.1"
 description = "YiQiao 自托管 AI 记忆核心 / Self-hosted AI memory core"
 authors = [
     { name = "YiQiao Contributors" }

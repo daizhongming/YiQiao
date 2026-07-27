@@ -2,7 +2,7 @@
 
 **简体中文** | [English](DOCUMENTATION_COVERAGE.md)
 
-最后审查：2026-07-22
+最后审查：2026-07-27
 
 本清单是 YiQiao 面向公开用户的英文与简体中文文档的权威范围。英文原文仍是规范来源。
 只有同一提交上的 `make docs-check` 成功退出时，表中的 `pass` 校验值才有效。
@@ -33,6 +33,7 @@
 | `docs/yiqiao/OPERATIONS.md` | `docs/yiqiao/OPERATIONS.zh-CN.md` | `markdown` | `required` | `required` | `complete` | `pass` |
 | `docs/yiqiao/PUBLIC_CONNECTOR.md` | `docs/yiqiao/PUBLIC_CONNECTOR.zh-CN.md` | `markdown` | `required` | `required` | `complete` | `pass` |
 | `docs/yiqiao/RELEASE_0.2.0.md` | `docs/yiqiao/RELEASE_0.2.0.zh-CN.md` | `markdown` | `required` | `required` | `complete` | `pass` |
+| `docs/yiqiao/RELEASE_0.2.1.md` | `docs/yiqiao/RELEASE_0.2.1.zh-CN.md` | `markdown` | `required` | `required` | `complete` | `pass` |
 | `docs/yiqiao/SECURITY_AUDIT.md` | `docs/yiqiao/SECURITY_AUDIT.zh-CN.md` | `markdown` | `required` | `required` | `complete` | `pass` |
 | `docs/yiqiao/TROUBLESHOOTING.md` | `docs/yiqiao/TROUBLESHOOTING.zh-CN.md` | `markdown` | `required` | `required` | `complete` | `pass` |
 | `docs/yiqiao/DOCUMENTATION_COVERAGE.md` | `docs/yiqiao/DOCUMENTATION_COVERAGE.zh-CN.md` | `markdown` | `required` | `required` | `complete` | `pass` |

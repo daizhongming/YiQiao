@@ -570,7 +570,7 @@ class TestAuthEdgeCases:
         assert resp.status_code == 200
         schema = resp.json()
         assert "paths" in schema
-        assert schema["info"]["version"] == "0.2.0"
+        assert schema["info"]["version"] == "0.2.1"
 
         resp = client.get("/docs")
         assert resp.status_code == 200

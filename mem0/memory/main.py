@@ -11,6 +11,7 @@ import os
 import re
 import threading
 import time
+import unicodedata
 import uuid
 import warnings
 from collections.abc import Callable, Mapping
@@ -89,6 +90,9 @@ warnings.filterwarnings("ignore", category=DeprecationWarning, message=".*swigva
 
 # Initialize logger early for util functions
 logger = logging.getLogger(__name__)
+
+_MEMORY_DEDUP_NAMESPACE = uuid.UUID("3bf2cb52-e99b-4e70-9806-99f8966d12d8")
+_IGNORABLE_MEMORY_TEXT_CHARACTERS = frozenset({"\u00ad", "\u200b", "\u2060", "\ufeff"})
 
 
 @dataclass
@@ -584,7 +588,7 @@ def _format_added_memory(record):
 def _derived_text_payload(data: str) -> Dict[str, str]:
     return {
         "data": data,
-        "hash": hashlib.md5(data.encode()).hexdigest(),
+        "hash": _memory_content_hash(data),
         "text_lemmatized": lemmatize_for_bm25(data),
     }
 
@@ -595,6 +599,92 @@ def _vector_store_list_rows(listed):
     if isinstance(listed, (list, tuple)):
         return listed
     return []
+
+
+def _normalize_memory_text(data: str) -> str:
+    """Canonicalize harmless representation differences before exact deduplication."""
+    normalized = unicodedata.normalize("NFKC", data)
+    normalized = "".join(character for character in normalized if character not in _IGNORABLE_MEMORY_TEXT_CHARACTERS)
+    return " ".join(normalized.split())
+
+
+def _memory_content_hash(data: str) -> str:
+    return hashlib.md5(_normalize_memory_text(data).encode()).hexdigest()
+
+
+def _memory_id_for_hash(filters: Mapping[str, Any], memory_hash: str) -> str:
+    scope = _build_session_scope(filters)
+    return str(uuid.uuid5(_MEMORY_DEDUP_NAMESPACE, f"{scope}\0{memory_hash}"))
+
+
+def _existing_payload_values(vector_store, key: str, values, filters: Dict[str, Any]) -> set[str]:
+    """Return exact payload matches without relying on semantic top-k recall."""
+    candidates = {str(value) for value in values if value is not None}
+    if not candidates:
+        return set()
+
+    batch_method = getattr(type(vector_store), "existing_payload_values", None)
+    if callable(batch_method):
+        try:
+            result = batch_method(vector_store, key, candidates, filters=filters)
+            if isinstance(result, (set, list, tuple)):
+                return {str(value) for value in result if str(value) in candidates}
+        except Exception as exc:
+            logger.debug("Batch exact-memory lookup failed; using list fallback: %s", exc)
+
+    try:
+        listed = vector_store.list(filters={**filters, key: list(candidates)}, top_k=len(candidates))
+        rows = _vector_store_list_rows(listed)
+    except Exception:
+        rows = []
+        for candidate in candidates:
+            try:
+                listed = vector_store.list(filters={**filters, key: candidate}, top_k=1)
+                rows.extend(_vector_store_list_rows(listed))
+            except Exception as exc:
+                logger.warning("Exact-memory lookup failed for %s=%s: %s", key, candidate, exc)
+
+    return {
+        str(payload.get(key))
+        for row in rows
+        if (payload := (getattr(row, "payload", None) or {})) and str(payload.get(key)) in candidates
+    }
+
+
+def _stored_memory_matches_hash(memory, memory_hash: str) -> bool:
+    payload = getattr(memory, "payload", None)
+    if not isinstance(payload, Mapping):
+        return False
+    if str(payload.get("hash") or "") == memory_hash:
+        return True
+    return isinstance(payload.get("data"), str) and _memory_content_hash(payload["data"]) == memory_hash
+
+
+class _KeyedLockPool:
+    """Reference-counted per-scope locks that do not grow with inactive entities."""
+
+    def __init__(self, lock_factory):
+        self._lock_factory = lock_factory
+        self._guard = threading.Lock()
+        self._entries = {}
+
+    def lease(self, key: str):
+        with self._guard:
+            entry = self._entries.get(key)
+            if entry is None:
+                entry = [self._lock_factory(), 0]
+                self._entries[key] = entry
+            entry[1] += 1
+            return entry[0]
+
+    def release(self, key: str, lock) -> None:
+        with self._guard:
+            entry = self._entries.get(key)
+            if entry is None or entry[0] is not lock:
+                return
+            entry[1] -= 1
+            if entry[1] == 0:
+                self._entries.pop(key, None)
 
 
 # Fields that hold runtime auth/connection objects and must be preserved.
@@ -992,6 +1082,7 @@ class Memory(MemoryBase):
         self._entity_store = None
         self._entity_store_lock = threading.Lock()
         self._entity_link_lock = threading.RLock()
+        self._memory_add_locks = _KeyedLockPool(threading.RLock)
 
         if MEM0_TELEMETRY:
             # Create telemetry config manually to avoid deepcopy issues with thread locks
@@ -1430,7 +1521,27 @@ class Memory(MemoryBase):
         prompt=None,
         operation_context: Optional[MemoryOperationContext] = None,
         pre_vector_write: Optional[Callable[[int], None]] = None,
+        _scope_lock_acquired: bool = False,
     ):
+        if operation_context is None and not _scope_lock_acquired:
+            if not hasattr(self, "_memory_add_locks"):
+                self._memory_add_locks = _KeyedLockPool(threading.RLock)
+            scope = _build_session_scope(filters)
+            lock = self._memory_add_locks.lease(scope)
+            try:
+                with lock:
+                    return self._add_to_vector_store(
+                        messages,
+                        metadata,
+                        filters,
+                        infer,
+                        prompt=prompt,
+                        pre_vector_write=pre_vector_write,
+                        _scope_lock_acquired=True,
+                    )
+            finally:
+                self._memory_add_locks.release(scope, lock)
+
         if operation_context is not None:
             if not infer:
                 raise ValueError("MemoryOperationContext requires infer=True")
@@ -1463,10 +1574,32 @@ class Memory(MemoryBase):
 
                 valid_messages.append(message_dict)
 
-            if pre_vector_write is not None:
-                pre_vector_write(len(valid_messages))
-
+            candidate_hashes = {
+                _memory_content_hash(message_dict["content"])
+                for message_dict in valid_messages
+                if isinstance(message_dict["content"], str)
+            }
+            existing_hashes = _existing_payload_values(
+                self.vector_store,
+                "hash",
+                candidate_hashes,
+                {key: value for key, value in filters.items() if key in _SESSION_SCOPE_KEYS and value},
+            )
+            seen_hashes = set()
+            selected_messages = []
             for message_dict in valid_messages:
+                msg_content = message_dict["content"]
+                mem_hash = _memory_content_hash(msg_content)
+                if mem_hash in existing_hashes or mem_hash in seen_hashes:
+                    logger.debug("Skipping duplicate raw memory (hash match): %s", msg_content[:50])
+                    continue
+                seen_hashes.add(mem_hash)
+                selected_messages.append((message_dict, mem_hash))
+
+            if pre_vector_write is not None:
+                pre_vector_write(len(selected_messages))
+
+            for message_dict, mem_hash in selected_messages:
                 per_msg_meta = deepcopy(metadata)
                 per_msg_meta.pop("_allowed_categories", None)
                 categories = _normalize_memory_categories(
@@ -1485,7 +1618,15 @@ class Memory(MemoryBase):
 
                 msg_content = message_dict["content"]
                 msg_embeddings = self.embedding_model.embed(msg_content, "add")
-                mem_id = self._create_memory(msg_content, {msg_content: msg_embeddings}, per_msg_meta)
+                mem_id = self._create_memory(
+                    msg_content,
+                    {msg_content: msg_embeddings},
+                    per_msg_meta,
+                    memory_id=_memory_id_for_hash(filters, mem_hash),
+                    skip_if_exists=True,
+                )
+                if mem_id is None:
+                    continue
 
                 returned_memories.append(
                     {
@@ -1563,8 +1704,48 @@ class Memory(MemoryBase):
             self.db.save_messages(messages, session_scope)
             return []
 
-        # Phase 3: Batch embed all extracted memory texts
-        mem_texts = [m.get("text", "") for m in extracted_memories if m.get("text")]
+        # Phase 3: Exact scope-aware dedup before embedding. Semantic retrieval helps
+        # the LLM with near-duplicates, while this lookup guarantees exact matches are
+        # not missed merely because they fell outside the vector search top-k.
+        candidate_hashes = {
+            _memory_content_hash(memory["text"])
+            for memory in extracted_memories
+            if isinstance(memory.get("text"), str) and memory["text"]
+        }
+        existing_hashes = _existing_payload_values(
+            self.vector_store,
+            "hash",
+            candidate_hashes,
+            search_filters,
+        )
+        for existing_memory in existing_results:
+            payload = getattr(existing_memory, "payload", None) or {}
+            if payload.get("hash"):
+                existing_hashes.add(str(payload["hash"]))
+            if isinstance(payload.get("data"), str):
+                existing_hashes.add(_memory_content_hash(payload["data"]))
+
+        selected_memories = []
+        seen_hashes = set()
+        for extracted_memory in extracted_memories:
+            text = extracted_memory.get("text")
+            if not isinstance(text, str) or not text:
+                continue
+            memory_hash = _memory_content_hash(text)
+            if memory_hash in existing_hashes or memory_hash in seen_hashes:
+                logger.debug("Skipping duplicate memory (hash match): %s", text[:50])
+                continue
+            seen_hashes.add(memory_hash)
+            selected_memories.append((extracted_memory, memory_hash))
+
+        if not selected_memories:
+            if pre_vector_write is not None:
+                pre_vector_write(0)
+            self.db.save_messages(messages, session_scope)
+            return []
+
+        # Phase 4: Batch embed only memories that survived exact deduplication.
+        mem_texts = [memory["text"] for memory, _memory_hash in selected_memories]
         try:
             mem_embeddings_list = self.embedding_model.embed_batch(mem_texts, "add")
             embed_map = dict(zip(mem_texts, mem_embeddings_list))
@@ -1577,33 +1758,19 @@ class Memory(MemoryBase):
                 except Exception as e:
                     logger.warning(f"Failed to embed memory text: {e}")
 
-        # Phase 4: Per-memory CPU processing + Phase 5: Hash dedup
-        # Build set of existing hashes for dedup
-        existing_hashes = set()
-        for mem in existing_results:
-            h = mem.payload.get("hash") if hasattr(mem, "payload") and mem.payload else None
-            if h:
-                existing_hashes.add(h)
-
+        # Phase 5: Build vector records.
         records = []  # (memory_id, text, embedding, payload)
-        seen_hashes = set()  # dedup within the current batch
         allowed_categories = (
             _normalize_memory_categories(metadata.get("_allowed_categories")) if isinstance(metadata, dict) else []
         )
-        for mem in extracted_memories:
+        for mem, mem_hash in selected_memories:
             text = mem.get("text")
             if not text or text not in embed_map:
                 continue
 
-            mem_hash = hashlib.md5(text.encode()).hexdigest()
-            if mem_hash in existing_hashes or mem_hash in seen_hashes:
-                logger.debug(f"Skipping duplicate memory (hash match): {text[:50]}")
-                continue
-            seen_hashes.add(mem_hash)
-
             text_lemmatized = lemmatize_for_bm25(text)
 
-            memory_id = str(uuid.uuid4())
+            memory_id = _memory_id_for_hash(filters, mem_hash)
             mem_metadata = deepcopy(metadata)
             mem_metadata.pop("_allowed_categories", None)
             mem_metadata["data"] = text
@@ -1633,19 +1800,27 @@ class Memory(MemoryBase):
         all_ids = [r[0] for r in records]
         all_payloads = [r[3] for r in records]
 
+        persisted_records = []
         try:
             self.vector_store.insert(
                 vectors=all_vectors,
                 ids=all_ids,
                 payloads=all_payloads,
             )
+            persisted_records = records
         except Exception:
             # Fallback: insert one by one
-            for mid, vec, pay in zip(all_ids, all_vectors, all_payloads):
+            for record in records:
+                mid, _text, vec, pay = record
                 try:
                     self.vector_store.insert(vectors=[vec], ids=[mid], payloads=[pay])
+                    persisted_records.append(record)
                 except Exception as e:
                     logger.error(f"Failed to insert memory {mid}: {e}")
+        records = persisted_records
+        if not records:
+            self.db.save_messages(messages, session_scope)
+            return []
 
         # Batch history
         history_records = [
@@ -3095,27 +3270,45 @@ class Memory(MemoryBase):
         display_first_run_notice(self, "sync", "history")
         return history
 
-    def _create_memory(self, data, existing_embeddings, metadata=None):
+    def _create_memory(
+        self,
+        data,
+        existing_embeddings,
+        metadata=None,
+        *,
+        memory_id=None,
+        skip_if_exists=False,
+    ):
         logger.debug(f"Creating memory with {data=}")
         if data in existing_embeddings:
             embeddings = existing_embeddings[data]
         else:
             embeddings = self.embedding_model.embed(data, memory_action="add")
-        memory_id = str(uuid.uuid4())
+        memory_id = memory_id or str(uuid.uuid4())
         new_metadata = deepcopy(metadata) if metadata is not None else {}
         new_metadata.pop("_allowed_categories", None)
-        new_metadata["data"] = data
-        new_metadata["hash"] = hashlib.md5(data.encode()).hexdigest()
+        new_metadata.update(_derived_text_payload(data))
         if "created_at" not in new_metadata:
             new_metadata["created_at"] = datetime.now(timezone.utc).isoformat()
         new_metadata["updated_at"] = new_metadata["created_at"]
-        new_metadata["text_lemmatized"] = lemmatize_for_bm25(data)
 
-        self.vector_store.insert(
-            vectors=[embeddings],
-            ids=[memory_id],
-            payloads=[new_metadata],
-        )
+        if skip_if_exists:
+            existing_memory = self.vector_store.get(vector_id=memory_id)
+            if _stored_memory_matches_hash(existing_memory, new_metadata["hash"]):
+                return None
+
+        try:
+            self.vector_store.insert(
+                vectors=[embeddings],
+                ids=[memory_id],
+                payloads=[new_metadata],
+            )
+        except Exception:
+            if skip_if_exists:
+                existing_memory = self.vector_store.get(vector_id=memory_id)
+                if _stored_memory_matches_hash(existing_memory, new_metadata["hash"]):
+                    return None
+            raise
         self.db.add_history(
             memory_id,
             None,
@@ -3328,6 +3521,7 @@ class AsyncMemory(MemoryBase):
         self.custom_instructions = self.config.custom_instructions
         self._entity_store = None
         self._entity_store_lock = threading.Lock()
+        self._memory_add_locks = _KeyedLockPool(asyncio.Lock)
 
         # Initialize reranker if configured
         self.reranker = None
@@ -3681,12 +3875,32 @@ class AsyncMemory(MemoryBase):
         effective_filters: dict,
         infer: bool,
         prompt: Optional[str] = None,
+        _scope_lock_acquired: bool = False,
     ):
+        if not _scope_lock_acquired:
+            if not hasattr(self, "_memory_add_locks"):
+                self._memory_add_locks = _KeyedLockPool(asyncio.Lock)
+            scope = _build_session_scope(effective_filters)
+            lock = self._memory_add_locks.lease(scope)
+            try:
+                async with lock:
+                    return await self._add_to_vector_store(
+                        messages,
+                        metadata,
+                        effective_filters,
+                        infer,
+                        prompt=prompt,
+                        _scope_lock_acquired=True,
+                    )
+            finally:
+                self._memory_add_locks.release(scope, lock)
+
         if not infer:
             returned_memories = []
             allowed_categories = (
                 _normalize_memory_categories(metadata.get("_allowed_categories")) if isinstance(metadata, dict) else []
             )
+            valid_messages = []
             for message_dict in messages:
                 if (
                     not isinstance(message_dict, dict)
@@ -3698,6 +3912,30 @@ class AsyncMemory(MemoryBase):
 
                 if message_dict["role"] == "system":
                     continue
+
+                valid_messages.append(message_dict)
+
+            candidate_hashes = {
+                _memory_content_hash(message_dict["content"])
+                for message_dict in valid_messages
+                if isinstance(message_dict["content"], str)
+            }
+            existing_hashes = await asyncio.to_thread(
+                _existing_payload_values,
+                self.vector_store,
+                "hash",
+                candidate_hashes,
+                {key: value for key, value in effective_filters.items() if key in _SESSION_SCOPE_KEYS and value},
+            )
+            seen_hashes = set()
+
+            for message_dict in valid_messages:
+                msg_content = message_dict["content"]
+                mem_hash = _memory_content_hash(msg_content)
+                if mem_hash in existing_hashes or mem_hash in seen_hashes:
+                    logger.debug("Skipping duplicate raw memory (hash match, async): %s", msg_content[:50])
+                    continue
+                seen_hashes.add(mem_hash)
 
                 per_msg_meta = deepcopy(metadata)
                 per_msg_meta.pop("_allowed_categories", None)
@@ -3715,9 +3953,16 @@ class AsyncMemory(MemoryBase):
                 if actor_name:
                     per_msg_meta["actor_id"] = actor_name
 
-                msg_content = message_dict["content"]
                 msg_embeddings = await asyncio.to_thread(self.embedding_model.embed, msg_content, "add")
-                mem_id = await self._create_memory(msg_content, {msg_content: msg_embeddings}, per_msg_meta)
+                mem_id = await self._create_memory(
+                    msg_content,
+                    {msg_content: msg_embeddings},
+                    per_msg_meta,
+                    memory_id=_memory_id_for_hash(effective_filters, mem_hash),
+                    skip_if_exists=True,
+                )
+                if mem_id is None:
+                    continue
 
                 returned_memories.append(
                     {
@@ -3792,8 +4037,45 @@ class AsyncMemory(MemoryBase):
             await asyncio.to_thread(self.db.save_messages, messages, session_scope)
             return []
 
-        # Phase 3: Batch embed all extracted memory texts
-        mem_texts = [m.get("text", "") for m in extracted_memories if m.get("text")]
+        # Phase 3: Exact scope-aware dedup before embedding.
+        candidate_hashes = {
+            _memory_content_hash(memory["text"])
+            for memory in extracted_memories
+            if isinstance(memory.get("text"), str) and memory["text"]
+        }
+        existing_hashes = await asyncio.to_thread(
+            _existing_payload_values,
+            self.vector_store,
+            "hash",
+            candidate_hashes,
+            search_filters,
+        )
+        for existing_memory in existing_results:
+            payload = getattr(existing_memory, "payload", None) or {}
+            if payload.get("hash"):
+                existing_hashes.add(str(payload["hash"]))
+            if isinstance(payload.get("data"), str):
+                existing_hashes.add(_memory_content_hash(payload["data"]))
+
+        selected_memories = []
+        seen_hashes = set()
+        for extracted_memory in extracted_memories:
+            text = extracted_memory.get("text")
+            if not isinstance(text, str) or not text:
+                continue
+            memory_hash = _memory_content_hash(text)
+            if memory_hash in existing_hashes or memory_hash in seen_hashes:
+                logger.debug("Skipping duplicate memory (hash match, async): %s", text[:50])
+                continue
+            seen_hashes.add(memory_hash)
+            selected_memories.append((extracted_memory, memory_hash))
+
+        if not selected_memories:
+            await asyncio.to_thread(self.db.save_messages, messages, session_scope)
+            return []
+
+        # Phase 4: Batch embed only memories that survived exact deduplication.
+        mem_texts = [memory["text"] for memory, _memory_hash in selected_memories]
         try:
             mem_embeddings_list = await asyncio.to_thread(self.embedding_model.embed_batch, mem_texts, "add")
             embed_map = dict(zip(mem_texts, mem_embeddings_list))
@@ -3805,32 +4087,19 @@ class AsyncMemory(MemoryBase):
                 except Exception as e:
                     logger.warning(f"Failed to embed memory text (async): {e}")
 
-        # Phase 4: Per-memory CPU processing + Phase 5: Hash dedup
-        existing_hashes = set()
-        for mem in existing_results:
-            h = mem.payload.get("hash") if hasattr(mem, "payload") and mem.payload else None
-            if h:
-                existing_hashes.add(h)
-
+        # Phase 5: Build vector records.
         records = []
-        seen_hashes = set()
         allowed_categories = (
             _normalize_memory_categories(metadata.get("_allowed_categories")) if isinstance(metadata, dict) else []
         )
-        for mem in extracted_memories:
+        for mem, mem_hash in selected_memories:
             text = mem.get("text")
             if not text or text not in embed_map:
                 continue
 
-            mem_hash = hashlib.md5(text.encode()).hexdigest()
-            if mem_hash in existing_hashes or mem_hash in seen_hashes:
-                logger.debug(f"Skipping duplicate memory (hash match, async): {text[:50]}")
-                continue
-            seen_hashes.add(mem_hash)
-
             text_lemmatized = lemmatize_for_bm25(text)
 
-            memory_id = str(uuid.uuid4())
+            memory_id = _memory_id_for_hash(effective_filters, mem_hash)
             mem_metadata = deepcopy(metadata)
             mem_metadata.pop("_allowed_categories", None)
             mem_metadata["data"] = text
@@ -3856,6 +4125,7 @@ class AsyncMemory(MemoryBase):
         all_ids = [r[0] for r in records]
         all_payloads = [r[3] for r in records]
 
+        persisted_records = []
         try:
             await asyncio.to_thread(
                 self.vector_store.insert,
@@ -3863,12 +4133,19 @@ class AsyncMemory(MemoryBase):
                 ids=all_ids,
                 payloads=all_payloads,
             )
+            persisted_records = records
         except Exception:
-            for mid, vec, pay in zip(all_ids, all_vectors, all_payloads):
+            for record in records:
+                mid, _text, vec, pay = record
                 try:
                     await asyncio.to_thread(self.vector_store.insert, vectors=[vec], ids=[mid], payloads=[pay])
+                    persisted_records.append(record)
                 except Exception as e:
                     logger.error(f"Failed to insert memory {mid} (async): {e}")
+        records = persisted_records
+        if not records:
+            await asyncio.to_thread(self.db.save_messages, messages, session_scope)
+            return []
 
         # Batch history
         history_records = [
@@ -4786,29 +5063,47 @@ class AsyncMemory(MemoryBase):
         await display_first_run_notice_async(self, "async", "history")
         return history
 
-    async def _create_memory(self, data, existing_embeddings, metadata=None):
+    async def _create_memory(
+        self,
+        data,
+        existing_embeddings,
+        metadata=None,
+        *,
+        memory_id=None,
+        skip_if_exists=False,
+    ):
         logger.debug(f"Creating memory with {data=}")
         if data in existing_embeddings:
             embeddings = existing_embeddings[data]
         else:
             embeddings = await asyncio.to_thread(self.embedding_model.embed, data, memory_action="add")
 
-        memory_id = str(uuid.uuid4())
+        memory_id = memory_id or str(uuid.uuid4())
         new_metadata = deepcopy(metadata) if metadata is not None else {}
         new_metadata.pop("_allowed_categories", None)
-        new_metadata["data"] = data
-        new_metadata["hash"] = hashlib.md5(data.encode()).hexdigest()
+        new_metadata.update(_derived_text_payload(data))
         if "created_at" not in new_metadata:
             new_metadata["created_at"] = datetime.now(timezone.utc).isoformat()
         new_metadata["updated_at"] = new_metadata["created_at"]
-        new_metadata["text_lemmatized"] = lemmatize_for_bm25(data)
 
-        await asyncio.to_thread(
-            self.vector_store.insert,
-            vectors=[embeddings],
-            ids=[memory_id],
-            payloads=[new_metadata],
-        )
+        if skip_if_exists:
+            existing_memory = await asyncio.to_thread(self.vector_store.get, vector_id=memory_id)
+            if _stored_memory_matches_hash(existing_memory, new_metadata["hash"]):
+                return None
+
+        try:
+            await asyncio.to_thread(
+                self.vector_store.insert,
+                vectors=[embeddings],
+                ids=[memory_id],
+                payloads=[new_metadata],
+            )
+        except Exception:
+            if skip_if_exists:
+                existing_memory = await asyncio.to_thread(self.vector_store.get, vector_id=memory_id)
+                if _stored_memory_matches_hash(existing_memory, new_metadata["hash"]):
+                    return None
+            raise
 
         await asyncio.to_thread(
             self.db.add_history,

@@ -1,6 +1,8 @@
 # This file was modified in 2026 by YiQiao contributors. See NOTICE.
 
 import json
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from unittest.mock import MagicMock, patch
 
@@ -13,6 +15,8 @@ from mem0.memory.main import (
     _build_filters_and_metadata,
     _build_session_scope,
     _entity_collection_name,
+    _memory_content_hash,
+    _normalize_memory_text,
 )
 from mem0.memory.utils import normalize_facts
 
@@ -881,6 +885,182 @@ def test_add_infer_false_embeds_once(mock_sqlite, mock_llm_factory, mock_vector_
 
     assert embedder.embed.call_count == 1
     mock_vector_store.insert.assert_called_once()
+
+
+@patch("mem0.utils.factory.EmbedderFactory.create")
+@patch("mem0.utils.factory.VectorStoreFactory.create")
+@patch("mem0.utils.factory.LlmFactory.create")
+@patch("mem0.memory.storage.SQLiteManager")
+def test_add_infer_false_skips_existing_exact_memory(
+    mock_sqlite, mock_llm_factory, mock_vector_factory, mock_embedder_factory
+):
+    embedder = MagicMock()
+    embedder.config = MagicMock(embedding_dims=3)
+    mock_embedder_factory.return_value = embedder
+
+    existing = MockVectorMemory(
+        "existing-id",
+        {
+            "data": "Repeated recruiter message",
+            "hash": _memory_content_hash("Repeated recruiter message"),
+            "project_id": "project-1",
+            "user_id": "candidate",
+        },
+    )
+    vector_store = MagicMock()
+    vector_store.list.return_value = [[existing]]
+    vector_store.get.return_value = None
+    mock_vector_factory.side_effect = [vector_store, MagicMock()]
+    mock_llm_factory.return_value = MagicMock()
+    mock_sqlite.return_value = MagicMock()
+
+    memory = Memory(MemoryConfig())
+    result = memory.add(
+        "Repeated recruiter message",
+        user_id="candidate",
+        metadata={"project_id": "project-1"},
+        infer=False,
+    )
+
+    assert result == {"results": []}
+    embedder.embed.assert_not_called()
+    vector_store.insert.assert_not_called()
+
+
+@patch("mem0.utils.factory.EmbedderFactory.create")
+@patch("mem0.utils.factory.VectorStoreFactory.create")
+@patch("mem0.utils.factory.LlmFactory.create")
+@patch("mem0.memory.storage.SQLiteManager")
+def test_add_infer_false_deduplicates_unicode_and_whitespace_variants_in_batch(
+    mock_sqlite, mock_llm_factory, mock_vector_factory, mock_embedder_factory
+):
+    embedder = MagicMock()
+    embedder.embed.return_value = [0.1, 0.2, 0.3]
+    embedder.config = MagicMock(embedding_dims=3)
+    mock_embedder_factory.return_value = embedder
+
+    vector_store = MagicMock()
+    vector_store.list.return_value = [[]]
+    vector_store.get.return_value = None
+    mock_vector_factory.side_effect = [vector_store, MagicMock()]
+    mock_llm_factory.return_value = MagicMock()
+    mock_sqlite.return_value = MagicMock()
+
+    memory = Memory(MemoryConfig())
+    result = memory.add(
+        [
+            {"role": "user", "content": "Apply\u00a0now"},
+            {"role": "user", "content": "Apply   now"},
+        ],
+        user_id="candidate",
+        infer=False,
+    )
+
+    assert len(result["results"]) == 1
+    assert embedder.embed.call_count == 1
+    vector_store.insert.assert_called_once()
+
+
+def test_memory_text_normalization_preserves_meaningful_joiners():
+    assert _normalize_memory_text("Apply\u00a0 now") == "Apply now"
+    assert _normalize_memory_text("\U0001f469\u200d\U0001f4bb") != _normalize_memory_text("\U0001f469\U0001f4bb")
+
+
+@patch("mem0.utils.factory.EmbedderFactory.create")
+@patch("mem0.utils.factory.VectorStoreFactory.create")
+@patch("mem0.utils.factory.LlmFactory.create")
+@patch("mem0.memory.storage.SQLiteManager")
+def test_concurrent_raw_retries_converge_on_one_memory(
+    mock_sqlite, mock_llm_factory, mock_vector_factory, mock_embedder_factory
+):
+    class InMemoryVectorStore:
+        def __init__(self):
+            self.rows = {}
+            self.lock = threading.Lock()
+
+        def list(self, filters=None, top_k=100):
+            filters = filters or {}
+            with self.lock:
+                rows = [
+                    row
+                    for row in self.rows.values()
+                    if all(
+                        row.payload.get(key) in value if isinstance(value, list) else row.payload.get(key) == value
+                        for key, value in filters.items()
+                    )
+                ]
+            return [rows[:top_k]]
+
+        def get(self, vector_id):
+            with self.lock:
+                return self.rows.get(vector_id)
+
+        def insert(self, vectors, payloads=None, ids=None):
+            with self.lock:
+                for memory_id, payload in zip(ids or [], payloads or []):
+                    self.rows[memory_id] = MockVectorMemory(memory_id, payload)
+
+    embedder = MagicMock()
+    embedder.embed.return_value = [0.1, 0.2, 0.3]
+    embedder.config = MagicMock(embedding_dims=3)
+    mock_embedder_factory.return_value = embedder
+
+    vector_store = InMemoryVectorStore()
+    mock_vector_factory.side_effect = [vector_store, MagicMock()]
+    mock_llm_factory.return_value = MagicMock()
+    mock_sqlite.return_value = MagicMock()
+    memory = Memory(MemoryConfig())
+
+    def add_once():
+        return memory.add("Same retry payload", user_id="candidate", infer=False)
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(executor.map(lambda _index: add_once(), range(2)))
+
+    assert sorted(len(result["results"]) for result in results) == [0, 1]
+    assert len(vector_store.rows) == 1
+    assert embedder.embed.call_count == 1
+
+
+@patch("mem0.memory.main.extract_entities_batch", return_value=[[]])
+@patch("mem0.utils.factory.EmbedderFactory.create")
+@patch("mem0.utils.factory.VectorStoreFactory.create")
+@patch("mem0.utils.factory.LlmFactory.create")
+@patch("mem0.memory.storage.SQLiteManager")
+def test_add_infer_true_checks_exact_hash_outside_semantic_top_k(
+    mock_sqlite, mock_llm_factory, mock_vector_factory, mock_embedder_factory, _mock_extract_entities_batch
+):
+    text = "The candidate prefers remote work"
+    embedder = MagicMock()
+    embedder.embed.return_value = [0.1, 0.2, 0.3]
+    embedder.config = MagicMock(embedding_dims=3)
+    mock_embedder_factory.return_value = embedder
+
+    unrelated = [
+        MockVectorMemory(f"unrelated-{index}", {"data": f"Other memory {index}", "hash": f"hash-{index}"})
+        for index in range(10)
+    ]
+    existing = MockVectorMemory(
+        "existing-id",
+        {"data": text, "hash": _memory_content_hash(text), "user_id": "candidate"},
+    )
+    vector_store = MagicMock()
+    vector_store.search.return_value = unrelated
+    vector_store.list.return_value = [[existing]]
+    mock_vector_factory.side_effect = [vector_store, MagicMock()]
+
+    llm = MagicMock()
+    llm.generate_response.return_value = json.dumps({"memory": [{"text": text}]})
+    mock_llm_factory.return_value = llm
+    mock_sqlite.return_value = MagicMock()
+
+    memory = Memory(MemoryConfig())
+    result = memory.add("Remote roles only", user_id="candidate", infer=True)
+
+    assert result == {"results": []}
+    assert embedder.embed.call_count == 1
+    embedder.embed_batch.assert_not_called()
+    vector_store.insert.assert_not_called()
 
 
 @patch("mem0.memory.main.extract_entities_batch", return_value=[[]])
