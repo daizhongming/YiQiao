@@ -64,7 +64,8 @@ jobs:
           context: ${{ matrix.context }}
           file: ${{ matrix.file }}
           tags: ${{ matrix.tag }}
-          platforms: linux/amd64,linux/arm64
+          # Pushes retain multi-arch coverage; PRs avoid repeating the slow QEMU build.
+          platforms: ${{ github.event_name == 'pull_request' && 'linux/amd64' || 'linux/amd64,linux/arm64' }}
           no-cache: true
           pull: true
           push: false

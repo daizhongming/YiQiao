@@ -77,6 +77,8 @@ docs/yiqiao/PUBLIC_CONNECTOR.md
 docs/yiqiao/PUBLIC_CONNECTOR.zh-CN.md
 docs/yiqiao/RELEASE_0.2.0.md
 docs/yiqiao/RELEASE_0.2.0.zh-CN.md
+docs/yiqiao/RELEASE_0.2.1.md
+docs/yiqiao/RELEASE_0.2.1.zh-CN.md
 docs/yiqiao/README.md
 docs/yiqiao/README.zh-CN.md
 docs/yiqiao/SECURITY_AUDIT.md

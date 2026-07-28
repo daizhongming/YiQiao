@@ -906,6 +906,12 @@ const translations: Record<string, string> = {
   "Total Memories": "记忆总数",
   "Search memories": "搜索记忆",
   "Refresh memories": "刷新记忆",
+  "Clean duplicate memories": "清理重复记忆",
+  "Clean duplicates": "清理重复项",
+  "Cleaning...": "正在清理...",
+  "Failed to clean duplicate memories": "清理重复记忆失败",
+  "YiQiao will keep the oldest memory in each exact duplicate group and permanently remove the rest. Different entity scopes are never merged.":
+    "YiQiao 会保留每组完全重复记忆中最早的一条，并永久删除其余记忆。不同实体作用域的记忆不会被合并。",
   "No memories found": "未找到记忆",
   "Memories stored for this entity will appear here.":
     "为此实体存储的记忆将显示在这里。",

@@ -9,12 +9,17 @@ from auth import require_project_read, require_project_write
 from db import SessionLocal, get_db
 from fastapi import APIRouter, Depends, HTTPException, Request
 from models import Settings
+from neo4j_graph import delete_memory as delete_graph_memory
+from neo4j_graph import upsert_memory as upsert_graph_memory
 from project_scope import DEFAULT_PROJECT_ID, get_project_id
 from pydantic import BaseModel, Field, field_validator, model_validator
 from routers import exports as exports_router
 from server_state import ProviderConfigurationRequiredError, get_memory_instance
 from settings_store import get_json, set_json
 from sqlalchemy.orm import Session
+from webhook_dispatcher import queue_webhook_event
+
+from mem0.memory.main import _normalize_memory_text
 
 router = APIRouter(prefix="/memories", tags=["memories"])
 
@@ -222,6 +227,31 @@ def _query_rows(rows: list[dict[str, Any]], query: MemoryQuery) -> dict[str, Any
     }
 
 
+def _duplicate_memory_groups(rows: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
+    grouped: dict[tuple[Any, ...], list[dict[str, Any]]] = {}
+    for row in rows:
+        text = row.get("memory") or row.get("data")
+        if not isinstance(text, str):
+            continue
+        normalized_text = _normalize_memory_text(text)
+        if not normalized_text:
+            continue
+        scope = tuple(str(row.get(key) or "") for key in SESSION_SCOPE_KEYS)
+        grouped.setdefault((*scope, normalized_text), []).append(row)
+
+    duplicate_groups = []
+    for group in grouped.values():
+        if len(group) < 2:
+            continue
+        group.sort(key=lambda item: (_sort_timestamp(item), str(item.get("id") or "")))
+        duplicate_groups.append(group)
+    return duplicate_groups
+
+
+def _merged_group_categories(group: list[dict[str, Any]]) -> list[str]:
+    return _normalize_categories([category for row in group for category in row.get("categories") or []])
+
+
 def _feedback_key(project_id: str, memory_id: str) -> str:
     return f"memory_feedback:{project_id}:{memory_id}"
 
@@ -300,6 +330,74 @@ def query_memories(
     try:
         response = _query_rows(_all_project_memories(get_project_id(request)), body)
         _set_query_log_context(request, body, response)
+        return response
+    except HTTPException:
+        raise
+    except ProviderConfigurationRequiredError:
+        raise
+    except Exception:
+        raise HTTPException(status_code=503, detail="The memory database is unreachable.")
+
+
+@router.post("/deduplicate", summary="Remove exact duplicate memories from the current project")
+def deduplicate_memories(
+    request: Request,
+    _auth=Depends(require_project_write),
+):
+    project_id = get_project_id(request)
+    try:
+        rows = _all_project_memories(project_id)
+        groups = _duplicate_memory_groups(rows)
+        memory_instance = get_memory_instance()
+        removed_ids: list[str] = []
+        failed_ids: list[str] = []
+
+        for group in groups:
+            survivor = group[0]
+            survivor_id = str(survivor.get("id") or "")
+            merged_categories = _merged_group_categories(group)
+            if survivor_id and merged_categories != _normalize_categories(survivor.get("categories")):
+                memory_instance.update(survivor_id, metadata={"categories": merged_categories})
+                graph_metadata = dict(survivor.get("metadata") or {})
+                graph_metadata["categories"] = merged_categories
+                graph_metadata["project_id"] = project_id
+                upsert_graph_memory(
+                    survivor_id,
+                    str(survivor.get("memory") or survivor.get("data") or ""),
+                    {key: survivor.get(key) for key in ENTITY_FIELDS.values()},
+                    graph_metadata,
+                )
+
+            for duplicate in group[1:]:
+                memory_id = str(duplicate.get("id") or "")
+                if not memory_id:
+                    continue
+                try:
+                    memory_instance.delete(memory_id)
+                    removed_ids.append(memory_id)
+                    delete_memory_feedback(project_id, memory_id)
+                    delete_graph_memory(memory_id)
+                    try:
+                        queue_webhook_event("memory.deleted", {"memory_id": memory_id}, project_id)
+                    except Exception:
+                        logging.warning("Failed to queue deletion webhook for %s.", memory_id, exc_info=True)
+                except ValueError:
+                    # A concurrent cleanup may already have removed the same record.
+                    removed_ids.append(memory_id)
+                except Exception:
+                    logging.warning("Failed to remove duplicate memory %s.", memory_id, exc_info=True)
+                    failed_ids.append(memory_id)
+
+        response = {
+            "scanned": len(rows),
+            "duplicate_groups": len(groups),
+            "removed": len(removed_ids),
+            "failed": len(failed_ids),
+        }
+        request.state.request_log_event_type = "DELETE"
+        request.state.request_log_payload = {"operation": "deduplicate", "project_id": project_id}
+        request.state.request_log_response = response
+        request.state.request_log_result_count = len(removed_ids)
         return response
     except HTTPException:
         raise

@@ -1,7 +1,7 @@
 {
   "_yiqiaoModificationNotice": "This file was modified in 2026 by YiQiao contributors. See NOTICE.",
   "name": "yiqiao-dashboard",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "YiQiao 自托管运维仪表盘 | Self-hosted operations dashboard for YiQiao",
   "private": true,
   "author": "YiQiao Contributors",
@@ -96,7 +96,7 @@
     "eslint": "^8",
     "eslint-config-next": "15.5.21",
     "jsdom": "^26.1.0",
-    "postcss": "^8",
+    "postcss": "^8.5.18",
     "prettier": "^3.5.2",
     "tailwindcss": "^3.3.0",
     "typescript": "^5.6.3",
@@ -104,11 +104,10 @@
   },
   "pnpm": {
     "overrides": {
-      "brace-expansion@1.1.15": "1.1.16",
-      "brace-expansion@5.0.6": "5.0.7",
+      "brace-expansion@<5.0.8": "5.0.8",
       "form-data@<4.0.6": ">=4.0.6",
       "js-yaml@<4.3.0": "4.3.0",
-      "postcss@<8.5.10": ">=8.5.10",
+      "postcss@<8.5.18": ">=8.5.18",
       "prismjs@<1.30.0": "1.30.0",
       "uuid@<11.1.1": ">=11.1.1",
       "sharp": "0.35.3"

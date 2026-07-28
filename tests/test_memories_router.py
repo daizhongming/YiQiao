@@ -1,6 +1,7 @@
 import os
 import sys
 from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 import pytest
 from pydantic import ValidationError
@@ -20,10 +21,11 @@ def _memory(
     user_id: str = "alice",
     categories: list[str] | None = None,
     metadata: dict | None = None,
+    content: str | None = None,
 ):
     return {
         "id": memory_id,
-        "memory": f"memory {memory_id}",
+        "memory": content or f"memory {memory_id}",
         "project_id": "default-project",
         "user_id": user_id,
         "agent_id": None,
@@ -234,3 +236,51 @@ def test_delete_memory_feedback_removes_project_scoped_record(monkeypatch):
     assert memories.delete_memory_feedback("project-a", "one") is True
     assert session.deleted is record
     assert session.committed is True
+
+
+def test_duplicate_groups_normalize_text_but_preserve_entity_scope():
+    rows = [
+        _memory("old", "2026-01-01T00:00:00Z", content="Apply\u00a0now"),
+        _memory("new", "2026-01-02T00:00:00Z", content="Apply   now"),
+        _memory("other-user", "2026-01-03T00:00:00Z", user_id="bob", content="Apply now"),
+        _memory("different", "2026-01-04T00:00:00Z", content="Apply later"),
+    ]
+
+    groups = memories._duplicate_memory_groups(rows)
+
+    assert [[row["id"] for row in group] for group in groups] == [["old", "new"]]
+
+
+def test_deduplicate_endpoint_keeps_oldest_and_cleans_related_state(monkeypatch):
+    rows = [
+        _memory("old", "2026-01-01T00:00:00Z", categories=["jobs"], content="Apply now"),
+        _memory("new", "2026-01-02T00:00:00Z", categories=["outreach"], content="Apply  now"),
+        _memory("unique", "2026-01-03T00:00:00Z", content="Interview tomorrow"),
+    ]
+    instance = SimpleNamespace(delete=MagicMock(), update=MagicMock())
+    deleted_graph = []
+    webhook_events = []
+    monkeypatch.setattr(memories, "_all_project_memories", lambda _project_id: rows)
+    monkeypatch.setattr(memories, "get_memory_instance", lambda: instance)
+    monkeypatch.setattr(memories, "delete_memory_feedback", lambda project_id, memory_id: True)
+    monkeypatch.setattr(memories, "delete_graph_memory", deleted_graph.append)
+    monkeypatch.setattr(
+        memories,
+        "upsert_graph_memory",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        memories,
+        "queue_webhook_event",
+        lambda event, payload, project_id: webhook_events.append((event, payload, project_id)),
+    )
+    request = _request()
+
+    response = memories.deduplicate_memories(request, None)
+
+    assert response == {"scanned": 3, "duplicate_groups": 1, "removed": 1, "failed": 0}
+    instance.update.assert_called_once_with("old", metadata={"categories": ["jobs", "outreach"]})
+    instance.delete.assert_called_once_with("new")
+    assert deleted_graph == ["new"]
+    assert webhook_events == [("memory.deleted", {"memory_id": "new"}, "default-project")]
+    assert request.state.request_log_result_count == 1

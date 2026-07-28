@@ -13,6 +13,7 @@ import {
   Clipboard,
   Clock3,
   Copy,
+  CopyMinus,
   GripHorizontal,
   ListFilter,
   MessageSquareText,
@@ -103,6 +104,13 @@ interface MemoryQueryResponse {
     total: number;
     categories: CategoryFacet[];
   };
+}
+
+interface MemoryDeduplicationResponse {
+  scanned: number;
+  duplicate_groups: number;
+  removed: number;
+  failed: number;
 }
 
 interface SourceMessage {
@@ -307,6 +315,8 @@ export default function MemoriesPage() {
   const [compactCalendar, setCompactCalendar] = useState(false);
   const [selectedMemory, setSelectedMemory] = useState<Memory | null>(null);
   const [memoryToDelete, setMemoryToDelete] = useState<Memory | null>(null);
+  const [deduplicateOpen, setDeduplicateOpen] = useState(false);
+  const [isDeduplicating, setIsDeduplicating] = useState(false);
   const [detail, setDetail] = useState<MemoryDetailsResponse | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailTab, setDetailTab] = useState<DetailTab>("details");
@@ -512,6 +522,35 @@ export default function MemoriesPage() {
         description: getErrorMessage(error),
         variant: "destructive",
       });
+    }
+  };
+
+  const handleDeduplicate = async () => {
+    setIsDeduplicating(true);
+    setDeduplicateOpen(false);
+    try {
+      const response = await api.post(MEMORY_ENDPOINTS.DEDUPLICATE);
+      const result = response.data as MemoryDeduplicationResponse;
+      setSelectedMemory(null);
+      setPage(1);
+      toast({
+        title:
+          language === "zh" ? "重复记忆清理完成" : "Duplicate cleanup complete",
+        description:
+          language === "zh"
+            ? `已扫描 ${result.scanned} 条记忆，删除 ${result.removed} 条重复项。`
+            : `Scanned ${result.scanned} memories and removed ${result.removed} duplicates.`,
+        variant: result.failed ? "destructive" : "success",
+      });
+      await loadMemories();
+    } catch (error) {
+      toast({
+        title: "Failed to clean duplicate memories",
+        description: getErrorMessage(error),
+        variant: "destructive",
+      });
+    } finally {
+      setIsDeduplicating(false);
     }
   };
 
@@ -843,6 +882,17 @@ export default function MemoriesPage() {
               </div>
             </PopoverContent>
           </Popover>
+          <Button
+            variant="outline"
+            size="sm"
+            aria-label="Clean duplicate memories"
+            title="Clean duplicate memories"
+            onClick={() => setDeduplicateOpen(true)}
+            disabled={isLoading || isDeduplicating}
+          >
+            <CopyMinus className="size-3.5" />
+            <span className="ml-2 hidden xl:inline">Clean duplicates</span>
+          </Button>
           <Button
             variant="outline"
             size="sm"
@@ -1468,6 +1518,15 @@ export default function MemoriesPage() {
         description="This memory will be permanently removed. This cannot be undone."
         itemName={memoryToDelete?.id ?? ""}
         confirmButtonText="Delete"
+      />
+      <DeleteConfirmationModal
+        isOpen={deduplicateOpen}
+        onClose={() => setDeduplicateOpen(false)}
+        onConfirm={() => void handleDeduplicate()}
+        title="Clean duplicate memories"
+        description="YiQiao will keep the oldest memory in each exact duplicate group and permanently remove the rest. Different entity scopes are never merged."
+        itemName="DEDUPLICATE"
+        confirmButtonText={isDeduplicating ? "Cleaning..." : "Clean duplicates"}
       />
     </div>
   );
