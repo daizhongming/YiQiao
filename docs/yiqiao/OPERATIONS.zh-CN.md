@@ -39,9 +39,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\init.ps1
 ```
 
 脚本会在需要时将 `server/.env.example` 复制为 `server/.env`，生成
-`POSTGRES_PASSWORD`、`NEO4J_PASSWORD`、`JWT_SECRET`、
-`OAUTH_DEVICE_CODE_SECRET`、`OAUTH_AUDIT_HMAC_SECRET` 和
-`OAUTH_PROXY_HMAC_SECRET`，创建
+`POSTGRES_PASSWORD`、`NEO4J_PASSWORD` 和 `JWT_SECRET`，创建
 `server/history`，并验证 Compose 配置。脚本会保留非空密钥，不会替换已经存在的环境文件。
 
 请将 `server/.env` 视为密钥。不要提交该文件、将其附在 Issue 中，或把未加密副本
@@ -104,7 +102,6 @@ docker compose down
 | `DASHBOARD_PORT` | `3000` | 控制台的主机端口 |
 | `PUBLIC_API_URL` | 根据 `API_PORT` 推导 | 反向代理后的浏览器可见 API URL |
 | `PUBLIC_DASHBOARD_URL` | 根据 `DASHBOARD_PORT` 推导 | 控制台公共来源与身份验证 URL |
-| `OAUTH_ISSUER` | 根据控制台 URL 推导 | 公共连接器签发者来源 |
 
 PostgreSQL 和 Neo4j 不映射主机端口，只连接内部后端网络。控制台和 API 默认监听
 回环地址。
@@ -113,14 +110,6 @@ PostgreSQL 和 Neo4j 不映射主机端口，只连接内部后端网络。控�
 地址，将绑定地址限制在代理拓扑允许的最小范围内，然后重启应用容器。不要直接暴露
 数据库服务。
 
-公共连接器部署必须将 `OAUTH_ISSUER` 与 `PUBLIC_DASHBOARD_URL` 设置为同一个外部
-HTTPS 来源。发现、OAuth、连接器健康检查和公布的记忆路径都应通过该来源路由，同时
-保持 API 内部来源私有。完整的信任、令牌、清理和审计契约见
-[公共连接器](PUBLIC_CONNECTOR.zh-CN.md)。
-
-除非控制台只有一个入口网关、该网关把 `X-Forwarded-For` 替换为恰好一个经过验证的
-客户端 IP，并实施等价的逐 IP 限流，否则应保持
-`OAUTH_GATEWAY_RATE_LIMIT_CONFIRMED=false`。透传或追加式转发头不满足该信任边界。
 
 ## 应用镜像
 
@@ -169,7 +158,7 @@ URL 和模型标识。处理生产数据前，请先使用页面中的连接测�
 
 | 位置 | 内容 | 生命周期 |
 | --- | --- | --- |
-| Compose 卷 `postgres_db` | 用户、API 密钥、OAuth 应用、授权与审计、设置、请求、导出和向量数据 | `docker compose down` 后保留；`down -v` 时删除 |
+| Compose 卷 `postgres_db` | 用户、API 密钥、设置、请求、导出和向量数据 | `docker compose down` 后保留；`down -v` 时删除 |
 | Compose 卷 `neo4j_data` | 图实体和关系 | `docker compose down` 后保留；`down -v` 时删除 |
 | `server/history/` | 记忆历史 SQLite 数据库、导入工作区、保留的源文件和本地运行时文件 | 主机目录；单独备份和清理 |
 | `server/.env` | 部署设置和密钥 | 主机文件；安全保存且不得提交 |
@@ -253,9 +242,7 @@ docker compose -p "$PROJECT" up -d
 
 运行代码块前，将加密密钥备份中的必要值选择性合并到替代部署的 `.env`。保留新生成
 的 `POSTGRES_PASSWORD`，因为该凭据属于替代 PostgreSQL 集群。恢复 Neo4j 快照
-所需的源 `NEO4J_USERNAME` 和 `NEO4J_PASSWORD`，以及源 `JWT_SECRET`、
-`OAUTH_DEVICE_CODE_SECRET`、`OAUTH_AUDIT_HMAC_SECRET`、
-`OAUTH_PROXY_HMAC_SECRET` 和所有必需的服务商密钥。不要整体复制旧 `.env`，
+所需的源 `NEO4J_USERNAME` 和 `NEO4J_PASSWORD`，以及源 `JWT_SECRET` 和所有必需的服务商密钥。不要整体复制旧 `.env`，
 也不要替换恢复检出目录的绑定地址和路径。
 必须在 `create neo4j` 捕获环境之前完成合并。并行恢复时，将 `ACTIVE_SERVER_DIR`
 设置为在线检出目录。只有在另一台主机上恢复且当前检出目录和卷不可能存在时，才可将
@@ -546,8 +533,7 @@ Compose 不会删除这些文件。
 - 除非数据路径和接收方已经获批，否则保持遥测关闭。
 - 保持 API 和控制台绑定到回环地址或私有接口。
 - 所有远程访问都必须先终止 TLS。
-- 怀疑发生泄露后，轮换 API 密钥、服务商密钥、数据库密码、JWT 密钥和 OAuth HMAC
-  密钥。轮换 OAuth HMAC 密钥会使待处理用户代码失效，或重置审计与限流哈希的连续性。
+- 怀疑发生泄露后，轮换 API 密钥、服务商密钥、数据库密码和 JWT 密钥。
 - 将数据库转储、图快照、history 文件和请求日志视为敏感用户数据。
 - 应用依赖项和基础镜像安全更新，并审查 SBOM。
 - 定期测试恢复和重启持久化。

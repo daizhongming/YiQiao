@@ -26,7 +26,7 @@ def _ensure_model_available():
     try:
         import spacy
     except ImportError:
-        raise ImportError("spaCy is not installed. Install it with: pip install yiqiao-memory[nlp]")
+        raise ImportError("spaCy is not installed. Install it with: pip install yiqiao[nlp]")
 
     if not spacy.util.is_package("en_core_web_sm"):
         if os.environ.get("YIQIAO_DISABLE_SPACY_DOWNLOAD", "").strip().lower() in {

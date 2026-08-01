@@ -33,8 +33,7 @@ docker compose up -d
 ```
 
 默认本地工作台地址为 `http://localhost:3000`。将任何服务暴露到公网前，请阅读
-[运维指南](OPERATIONS.zh-CN.md)、[公共连接器](PUBLIC_CONNECTOR.zh-CN.md)和
-[故障排查](TROUBLESHOOTING.zh-CN.md)。
+[运维指南](OPERATIONS.zh-CN.md)和[故障排查](TROUBLESHOOTING.zh-CN.md)。
 
 ## 发布边界
 

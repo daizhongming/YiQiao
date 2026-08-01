@@ -156,74 +156,9 @@ process history; rotate it again through the dashboard afterward when practical.
 - Confirm the key has not been revoked and belongs to that project.
 - Use an administrator session, not a project key, for control-plane settings.
 
-## Public Connector Discovery or Device Flow Fails
+## Retired OAuth Endpoints
 
-Start with read-only requests to the configured issuer; do not test against an
-unrelated live deployment:
-
-```bash
-curl --fail-with-body "$ISSUER/.well-known/oauth-authorization-server"
-curl --fail-with-body "$ISSUER/.well-known/service-capabilities"
-curl --fail-with-body "$ISSUER/api/health"
-```
-
-Every advertised URL must use the exact trusted `OAUTH_ISSUER` origin. In
-production it must be HTTPS and must equal `PUBLIC_DASHBOARD_URL`. The public
-process-health route is `/api/health`; `/v1/ping/` is intentionally protected
-and is not a substitute for process health.
-
-If connector requests through the Dashboard fail before reaching the API,
-confirm that the Dashboard and API have the same non-empty
-`OAUTH_PROXY_HMAC_SECRET`, then recreate only those application containers.
-Never print the secret or signed headers. Leave
-`OAUTH_GATEWAY_RATE_LIMIT_CONFIRMED=false` unless the sole ingress gateway
-replaces `X-Forwarded-For` with exactly one validated client IP and applies
-equivalent per-IP limits; a pass-through or append-only proxy is not trusted.
-
-- `invalid_client`: confirm the public client is pre-registered, active, and
-  uses the exact `client_id`.
-- `invalid_scope` or `invalid_target`: compare the requested scopes and
-  audience with the application registration and capability document.
-- `invalid_grant`: discard the request after an expired/used device code or
-  PKCE verifier mismatch and start a new Device Flow; do not log either value.
-- `authorization_pending`: continue one poller at the advertised interval.
-  For `slow_down`, increase the interval; for `429`, stop and honor
-  `Retry-After`.
-- `access_denied` or `expired_token`: start a new device request rather than
-  repeatedly exchanging the old code.
-
-The token endpoint supports only device-code exchange and refresh. Client
-Credentials and RFC 8693 Token Exchange return an unsupported grant error by
-design. MCP Streamable HTTP has no endpoint in this release because it remains
-ADR-only evaluation; it cannot be used as an OAuth or project-isolation bypass.
-
-After upgrading from retired legacy pairing, pending pairing requests are lost
-and old connections must be registered as needed and reauthorized through
-Device Flow. Downgrading cannot recover that state or undo revocations; follow
-[Migration](MIGRATION.md) and restore the verified pre-upgrade backup when a
-data rollback is required.
-
-## OAuth Token or Protected Resource Returns an Error
-
-- `401 invalid_token` usually means the token is expired, revoked, malformed,
-  belongs to a disabled application, or its grant is no longer active. Obtain a
-  new authorization instead of editing stored state.
-- `403 insufficient_scope`, `invalid_target`, or `project_scope_mismatch` means
-  the route, audience, scope, or project does not match the grant. Remove any
-  conflicting `X-Project-ID`, query `project_id`, memory metadata project, or
-  search-filter project; a caller cannot override the token's project.
-- A changed user role, removed project membership, or deleted project takes
-  effect on the next request. Reauthorization cannot restore access that the
-  user no longer has.
-- Reusing a rotated refresh token revokes its entire family. Stop all concurrent
-  refresh writers, discard the family, and complete a new Device Flow.
-- RFC 7009 revocation is idempotent, so a successful empty response does not
-  prove that the supplied token was known. Confirm the intended grant is absent
-  in Connected Apps and verify that subsequent resource access is rejected.
-
-Use correlation identifiers and sanitized OAuth audit events when diagnosing
-these failures. Never collect raw authorization headers, form bodies, device or
-user codes, PKCE verifiers, tokens, token hashes, or database rows.
+OAuth Device Flow was removed in migration `019`. Requests to `/oauth/*` and the former discovery endpoints now return `404`. Replace OAuth credentials with a project API key and send it in the `X-API-Key` header together with the intended `X-Project-ID`.
 
 ## Provider Connection Fails
 

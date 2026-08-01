@@ -54,32 +54,11 @@ planned state move.
 Legacy core environment prefixes remain accepted for compatibility. New
 deployment settings use YiQiao names.
 
-## Public Connector Migration
+## OAuth Device Flow Retirement
 
-Alembic revision `018` replaces the retired product-specific pairing state
-with the generic Public Service Connector OAuth schema. This transition is
-intentionally not a data conversion:
+Alembic revision `019` removes OAuth Device Flow, all public connector endpoints, and the Connected Apps dashboard. Applying the migration permanently deletes OAuth application registrations, pending device codes, grants, refresh tokens, and OAuth audit rows. Existing OAuth credentials stop working immediately.
 
-- Every pending legacy pairing request is deleted and cannot be completed
-  after the upgrade.
-- Existing legacy connections do not become OAuth grants. Register the public
-  client if necessary, then have every previously connected user complete a
-  new Device Authorization Grant from Connected Apps.
-- Credentials tagged with the retired pairing key type are revoked. Standard
-  project API keys are not pairing credentials and are not revoked by this
-  retirement step.
-
-The transition is irreversible from the migrated database alone. An Alembic
-downgrade cannot reconstruct pending pairing requests, restore old connections,
-or reverse a credential or grant revocation. A downgrade is therefore neither
-a rollback nor a recovery procedure.
-
-A valid rollback requires a complete, verified database backup taken before
-revision `018`. Stop writes and restore that backup, with its matching secrets,
-into new isolated volumes; do not run an older API against the migrated
-database. Migration rehearsals and all automated or manual validation of
-revision `018` must run only against a disposable, isolated test database.
-Never use an existing, shared, or production database as a migration test.
+Before upgrading, migrate integrations to project-scoped API keys. Send the key through `X-API-Key` and select the project with `X-Project-ID`. Migration `019` is intentionally irreversible because deleted credentials cannot be restored safely.
 
 ## Data Migration Options
 
@@ -272,10 +251,9 @@ If the source schema cannot read migrated databases, restore its pre-migration
 backups into separate volumes. Do not start an older API against the migrated
 production volumes.
 
-In particular, downgrading revision `018` cannot recover retired pairing rows
-or undo revocations. Restoring the verified pre-upgrade database backup is the
-only valid data rollback for the public-connector transition; all affected
-clients must otherwise reauthorize through Device Flow.
+Migration `019` cannot restore removed OAuth credentials. Roll back by
+restoring a verified pre-upgrade database backup, then migrate integrations to
+project API keys before upgrading again.
 
 For a selective request-log merge, stop target writes and use the owned-row
 ledger to remove only rows created by that merge. Verify the pre-existing target

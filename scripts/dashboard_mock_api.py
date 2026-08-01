@@ -172,7 +172,7 @@ REQUESTS = [
         "path": ["/search", "/memories", "/search", "/v1/ping/", "/memories"][index],
         "status_code": 200,
         "latency_ms": [42.1, 87.6, 33.8, 9.4, 65.2][index],
-        "auth_type": "oauth" if index < 3 else "bearer",
+        "auth_type": "api_key" if index < 3 else "bearer",
         "project_id": "default-project",
         "operation": "api_request",
         "event_type": "memory_search" if index in {0, 2} else "memory_write",
@@ -199,80 +199,6 @@ class MockState:
                 "created_at": "2026-07-18T08:00:00Z",
                 "last_used_at": "2026-07-22T11:48:00Z",
             }
-        ]
-        self.device = {
-            "id": "2db1048e-a24e-4ea8-a25f-1ae04763b694",
-            "client_id": "research-assistant",
-            "application_name": "Research Assistant",
-            "audience": "yiqiao:memory-api",
-            "requested_scopes": ["memory:read", "memory:write"],
-            "approved_scopes": [],
-            "status": "pending",
-            "project_id": None,
-            "expires_at": "2026-07-22T13:00:00Z",
-            "created_at": NOW,
-        }
-        self.grants = [
-            {
-                "id": "fd0b4ba1-40f0-459e-9f83-e3fbe755e40f",
-                "client_id": "knowledge-canvas",
-                "application_name": "Knowledge Canvas",
-                "audience": "yiqiao:memory-api",
-                "scopes": ["memory:read"],
-                "project_id": "default-project",
-                "status": "active",
-                "access_expires_at": "2026-07-22T12:15:00Z",
-                "refresh_expires_at": "2026-08-21T12:00:00Z",
-                "last_used_at": "2026-07-22T11:48:00Z",
-                "revoked_at": None,
-                "revoke_reason": None,
-                "created_at": "2026-07-18T08:00:00Z",
-                "is_owner": True,
-            },
-            {
-                "id": "c4c2b75d-9d25-4ccc-9ea0-625cdfa6f491",
-                "client_id": "research-assistant",
-                "application_name": "Research Assistant",
-                "audience": "yiqiao:memory-api",
-                "scopes": ["memory:read", "memory:write"],
-                "project_id": "default-project",
-                "status": "revoked",
-                "access_expires_at": "2026-07-20T10:15:00Z",
-                "refresh_expires_at": "2026-08-19T10:00:00Z",
-                "last_used_at": "2026-07-20T09:58:00Z",
-                "revoked_at": "2026-07-20T10:02:00Z",
-                "revoke_reason": "dashboard_revocation",
-                "created_at": "2026-07-19T10:00:00Z",
-                "is_owner": True,
-            },
-        ]
-        self.applications = [
-            {
-                "client_id": "knowledge-canvas",
-                "display_name": "Knowledge Canvas",
-                "client_type": "public",
-                "allowed_audiences": ["yiqiao:memory-api"],
-                "allowed_scopes": ["memory:read"],
-                "status": "active",
-                "operator_metadata": {"website": "https://example.invalid/knowledge-canvas"},
-                "created_at": "2026-07-17T08:00:00Z",
-                "updated_at": "2026-07-17T08:00:00Z",
-                "last_used_at": "2026-07-22T11:48:00Z",
-                "revoked_at": None,
-            },
-            {
-                "client_id": "research-assistant",
-                "display_name": "Research Assistant",
-                "client_type": "public",
-                "allowed_audiences": ["yiqiao:memory-api"],
-                "allowed_scopes": ["memory:read", "memory:write"],
-                "status": "active",
-                "operator_metadata": {},
-                "created_at": "2026-07-18T08:00:00Z",
-                "updated_at": "2026-07-18T08:00:00Z",
-                "last_used_at": "2026-07-20T09:58:00Z",
-                "revoked_at": None,
-            },
         ]
 
 
@@ -483,7 +409,7 @@ class DashboardMockHandler(BaseHTTPRequestHandler):
             self._json(
                 {
                     "results": [
-                        {"name": "OAuth", "norm": "oauth", "type": "concept", "memory_count": 12},
+                        {"name": "Project scope", "norm": "project scope", "type": "concept", "memory_count": 12},
                         {"name": "YiQiao", "norm": "yiqiao", "type": "product", "memory_count": 18},
                     ]
                 }
@@ -534,25 +460,6 @@ class DashboardMockHandler(BaseHTTPRequestHandler):
             )
         elif path == "/configure/providers":
             self._json({"llm": ["openai"], "embedder": ["openai"], "vector_store": ["qdrant"]})
-        elif path == "/oauth/grants":
-            with STATE.lock:
-                audits = [
-                    {
-                        "id": "audit-001",
-                        "event_type": "resource.access",
-                        "outcome": "success",
-                        "client_id": "knowledge-canvas",
-                        "application_name": "Knowledge Canvas",
-                        "grant_id": STATE.grants[0]["id"],
-                        "project_id": "default-project",
-                        "metadata": {},
-                        "created_at": "2026-07-22T11:48:00Z",
-                    }
-                ]
-                self._json({"items": deepcopy(STATE.grants), "audit_events": audits, "can_manage_project": True})
-        elif path == "/oauth/applications":
-            with STATE.lock:
-                self._json({"items": deepcopy(STATE.applications), "can_register": True})
         else:
             self._json({"items": [], "results": [], "status": "ok"})
 
@@ -598,67 +505,6 @@ class DashboardMockHandler(BaseHTTPRequestHandler):
                 }
                 STATE.api_keys.append(stored)
                 self._json({**deepcopy(stored), "key": "one-time-dashboard-preview-key"}, HTTPStatus.CREATED)
-        elif path == "/oauth/device-requests/lookup":
-            if body.get("user_code") not in {"YIQO-2026", "yiqo-2026"}:
-                self._json({"detail": "Device request not found."}, HTTPStatus.NOT_FOUND)
-            else:
-                with STATE.lock:
-                    self._json(deepcopy(STATE.device))
-        elif path.endswith("/approve") and path.startswith("/oauth/device-requests/"):
-            with STATE.lock:
-                STATE.device["status"] = "approved"
-                STATE.device["project_id"] = str(body.get("project_id") or "default-project")
-                STATE.device["approved_scopes"] = body.get("approved_scopes") or STATE.device["requested_scopes"]
-                self._json(deepcopy(STATE.device))
-        elif path.endswith("/reject") and path.startswith("/oauth/device-requests/"):
-            with STATE.lock:
-                STATE.device["status"] = "denied"
-                self._json(deepcopy(STATE.device))
-        elif path.endswith("/revoke") and path.startswith("/oauth/grants/"):
-            grant_id = path.split("/")[3]
-            with STATE.lock:
-                grant = next((item for item in STATE.grants if item["id"] == grant_id), None)
-                if grant:
-                    grant["status"] = "revoked"
-                    grant["revoked_at"] = NOW
-                    grant["revoke_reason"] = "dashboard_revocation"
-                self._json({"id": grant_id, "status": "revoked"})
-        elif path == "/oauth/grants/revoke-by-application":
-            with STATE.lock:
-                revoked = 0
-                for grant in STATE.grants:
-                    if grant["client_id"] == body.get("client_id") and grant["status"] == "active":
-                        grant["status"] = "revoked"
-                        grant["revoked_at"] = NOW
-                        revoked += 1
-                self._json(
-                    {"client_id": body.get("client_id"), "project_id": body.get("project_id"), "revoked": revoked}
-                )
-        elif path == "/oauth/applications":
-            application = {
-                "client_id": str(body.get("client_id") or "new-public-client"),
-                "display_name": str(body.get("display_name") or "New public client"),
-                "client_type": "public",
-                "allowed_audiences": ["yiqiao:memory-api"],
-                "allowed_scopes": body.get("allowed_scopes") or ["memory:read"],
-                "status": "active",
-                "operator_metadata": body.get("operator_metadata") or {},
-                "created_at": NOW,
-                "updated_at": NOW,
-                "last_used_at": None,
-                "revoked_at": None,
-            }
-            with STATE.lock:
-                STATE.applications.append(application)
-            self._json(application, HTTPStatus.CREATED)
-        elif path.endswith("/revoke") and path.startswith("/oauth/applications/"):
-            client_id = path.split("/")[3]
-            with STATE.lock:
-                application = next((item for item in STATE.applications if item["client_id"] == client_id), None)
-                if application:
-                    application["status"] = "revoked"
-                    application["revoked_at"] = NOW
-                self._json(deepcopy(application or {"client_id": client_id, "status": "revoked"}))
         else:
             self._json({"status": "ok", "id": "mock-operation"}, HTTPStatus.CREATED)
 

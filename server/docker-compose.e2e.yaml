@@ -29,8 +29,6 @@ services:
       APP_DB_NAME: yiqiao_app
       AUTH_DISABLED: "false"
       ADMIN_API_KEY: ""
-      OAUTH_ALLOW_INSECURE_LOOPBACK: "true"
-      OAUTH_GATEWAY_RATE_LIMIT_CONFIRMED: "false"
       ANTHROPIC_API_KEY: ""
       DATABASE_URL: ""
       EMBEDDING_API_KEY: ""

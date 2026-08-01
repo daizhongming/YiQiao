@@ -169,7 +169,7 @@ export default function NavWrapper() {
   );
 
   const sidebarContent = (collapsed: boolean, mobile = false) => (
-    <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto overflow-x-hidden px-3 py-3">
+    <div className="dashboard-sidebar-content flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto overflow-x-hidden px-3 py-3">
       <Link
         href="/dashboard"
         onClick={mobile ? () => setMobileNavOpen(false) : undefined}
@@ -191,7 +191,7 @@ export default function NavWrapper() {
           <button
             type="button"
             className={cn(
-              "flex h-9 w-full shrink-0 items-center rounded-md border border-transparent text-left text-sm transition-colors hover:bg-surface-default-secondary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              "dashboard-organization-trigger flex h-10 w-full shrink-0 items-center rounded-md border border-transparent text-left text-sm transition-colors hover:bg-surface-default-secondary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
               collapsed ? "justify-center px-0" : "gap-2 px-1.5",
             )}
             aria-label={`${t("Organization")}${
@@ -293,7 +293,7 @@ export default function NavWrapper() {
           id="dashboard-mobile-navigation"
           aria-describedby={undefined}
           side="left"
-          className="w-[min(20rem,calc(100vw-2rem))] gap-0 overflow-hidden border-memBorder-primary bg-surface-default-secondary p-0 [&>button]:right-3 [&>button]:top-3"
+          className="dashboard-mobile-navigation w-[min(20rem,calc(100vw-2rem))] gap-0 overflow-hidden border-memBorder-primary bg-surface-default-secondary p-0 [&>button]:right-3 [&>button]:top-3"
         >
           <SheetHeader className="sr-only">
             <SheetTitle>{t("Navigation")}</SheetTitle>
@@ -308,7 +308,7 @@ export default function NavWrapper() {
             type="button"
             variant="subtle"
             size="icon"
-            className="size-9 shrink-0 md:hidden"
+            className="dashboard-shell-icon-button size-10 shrink-0 md:hidden"
             onClick={() => setMobileNavOpen(true)}
             aria-label={t("Open navigation")}
             aria-controls="dashboard-mobile-navigation"
@@ -319,7 +319,7 @@ export default function NavWrapper() {
           <button
             type="button"
             onClick={() => dispatch(toggleSidebar())}
-            className="hidden size-8 shrink-0 items-center justify-center rounded-md text-onSurface-default-tertiary hover:bg-surface-default-secondary-hover hover:text-onSurface-default-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:inline-flex"
+            className="dashboard-shell-icon-button hidden size-9 shrink-0 items-center justify-center rounded-md text-onSurface-default-tertiary hover:bg-surface-default-secondary-hover hover:text-onSurface-default-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:inline-flex"
             aria-label={
               isSidebarCollapsed ? t("Expand sidebar") : t("Collapse sidebar")
             }
@@ -333,7 +333,7 @@ export default function NavWrapper() {
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                className="flex h-9 min-w-0 max-w-[min(13rem,50vw)] items-center gap-2 rounded-md border border-memBorder-primary bg-surface-default-primary px-2 text-left text-xs hover:bg-surface-default-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:w-44"
+                className="dashboard-project-trigger flex h-10 min-w-0 max-w-[min(13rem,48vw)] items-center gap-2 rounded-md border border-memBorder-primary bg-surface-default-primary px-2.5 text-left text-xs hover:bg-surface-default-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:w-48"
               >
                 <Folder className="size-4 shrink-0 text-onSurface-default-tertiary" />
                 <span className="min-w-0 flex-1 truncate">
@@ -406,7 +406,7 @@ export default function NavWrapper() {
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                className="flex h-9 items-center gap-1.5 rounded-md px-1.5 hover:bg-surface-default-secondary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="dashboard-account-trigger flex h-10 items-center gap-1.5 rounded-md px-1.5 hover:bg-surface-default-secondary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 aria-label={t(`Open account menu for ${userDisplayName}`)}
               >
                 <span className="grid size-7 place-items-center rounded-full bg-surface-default-tertiary text-xs font-semibold">

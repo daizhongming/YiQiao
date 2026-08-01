@@ -6,8 +6,7 @@
 YiQiao is a self-hosted memory service for AI assistants and agents. It combines
 an authenticated REST API, an operations dashboard, semantic and graph-backed
 memory, chat-history import, export, usage controls, and webhooks in one Docker
-Compose deployment. Generic public clients can connect through OAuth Device
-Flow with PKCE without receiving a long-lived project API key.
+Compose deployment. Integrations authenticate with project-scoped API keys.
 
 ## Quick Start
 
@@ -128,10 +127,10 @@ Invoke-RestMethod -Method Post -Uri "$apiUrl/search" -Headers $headers -ContentT
 
 ## Python Entry Point
 
-Install the Python package from the checked-out source:
+Install the published Python package:
 
 ```bash
-python -m pip install .
+python -m pip install yiqiao
 ```
 
 YiQiao provides synchronous and asynchronous Python entry points:
@@ -157,8 +156,6 @@ shown above.
   including custom OpenAI-compatible base URLs.
 - Authentication enabled by default, administrator onboarding, project API keys,
   role-aware workspace access, and request logging.
-- Public Service Connector Protocol `1.0` discovery, project-bound OAuth Device
-  Flow, rotating refresh tokens, and connected-application revocation.
 - Chat-history import with progress, retry, cancellation, and storage quotas.
 
 Typical uses include persistent assistant preferences, support context, research
@@ -202,11 +199,6 @@ and secrets out of version control. Do not expose the API or dashboard directly
 to the internet; terminate TLS at a trusted reverse proxy and restrict access to
 the intended network.
 
-For public clients, set `OAUTH_ISSUER` and `PUBLIC_DASHBOARD_URL` to the same
-external HTTPS origin. See the [Public Connector guide](docs/yiqiao/PUBLIC_CONNECTOR.md)
-for registration, discovery, proxy, scope, revocation, cleanup, and security
-requirements.
-
 See [Operations](docs/yiqiao/OPERATIONS.md) for ports, persistence, backup,
 upgrade, source builds, and removal.
 
@@ -215,7 +207,6 @@ upgrade, source builds, and removal.
 - [Operations](docs/yiqiao/OPERATIONS.md)
 - [Migration](docs/yiqiao/MIGRATION.md)
 - [Troubleshooting](docs/yiqiao/TROUBLESHOOTING.md)
-- [Public connector](docs/yiqiao/PUBLIC_CONNECTOR.md)
 - [Licensing and provenance](docs/yiqiao/LEGAL.md)
 - [Security policy](SECURITY.md)
 - [Contributing](CONTRIBUTING.md)

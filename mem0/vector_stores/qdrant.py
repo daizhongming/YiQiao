@@ -103,7 +103,7 @@ class Qdrant(VectorStoreBase):
             except ImportError:
                 logger.warning(
                     "fastembed not installed - BM25 keyword search disabled. "
-                    'Install it with: pip install "yiqiao-memory[extras]"'
+                    'Install it with: pip install "yiqiao[extras]"'
                 )
                 self._bm25_encoder = False  # sentinel: tried and failed
             except Exception as e:

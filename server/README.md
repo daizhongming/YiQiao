@@ -11,8 +11,7 @@ Docker Compose deployment. The canonical product Quick Start is in the
 
 Run initialization from the repository root. The initializer copies
 `server/.env.example`, generates independent `POSTGRES_PASSWORD`,
-`NEO4J_PASSWORD`, `JWT_SECRET`, `OAUTH_DEVICE_CODE_SECRET`,
-`OAUTH_AUDIT_HMAC_SECRET`, and `OAUTH_PROXY_HMAC_SECRET` values, and preserves
+`NEO4J_PASSWORD`, and `JWT_SECRET` values, and preserves
 an existing `.env`. Provider credentials are configured in the browser and do
 not block service startup.
 
@@ -41,7 +40,6 @@ service addresses are:
 | API | <http://localhost:8888> | `API_PORT` |
 | OpenAPI | <http://localhost:8888/docs> | follows `API_PORT` |
 | Health | <http://localhost:8888/api/health> | follows `API_PORT` |
-| Connector discovery | <http://localhost:3000/.well-known/service-capabilities> | `OAUTH_ISSUER` |
 
 The default deployment pulls the configured release images. To build the API
 and dashboard from this checkout, run the following from the repository root in
@@ -61,20 +59,6 @@ Authentication is enabled and telemetry is disabled by default. The API and
 dashboard bind to loopback, while PostgreSQL and Neo4j remain on the internal
 backend network without host port mappings. Do not expose the services
 directly to the internet; use a trusted TLS reverse proxy or private network.
-For public connectors, set `OAUTH_ISSUER` and `PUBLIC_DASHBOARD_URL` to the
-same external HTTPS origin. The issuer exposes generic OAuth Device Flow with
-PKCE and project-bound, short-lived Bearer tokens through Dashboard proxy
-routes; the API and databases remain private origins. HTTP loopback connector
-testing additionally requires `OAUTH_ALLOW_INSECURE_LOOPBACK=true`; never
-enable that flag in production. The Dashboard signs the connector transport
-peer before proxying to the API. Set `OAUTH_GATEWAY_RATE_LIMIT_CONFIRMED=true`
-only when the sole ingress gateway replaces `X-Forwarded-For` with exactly one
-validated client IP; otherwise the Dashboard socket peer is authoritative.
-
-This connector release supports user-mediated Device Authorization and refresh
-only. It does not implement Client Credentials, RFC 8693 Token Exchange, or an
-MCP Streamable HTTP endpoint. MCP remains an ADR evaluation and cannot bypass
-OAuth or project isolation.
 
 Persistent application, vector, and export-record data is stored in the
 `postgres_db` volume, graph data in `neo4j_data`, and memory-history SQLite plus
@@ -91,6 +75,5 @@ copy of migrated data.
 - [Operations, backup, upgrade, rollback, and removal](../docs/yiqiao/OPERATIONS.md)
 - [Migration](../docs/yiqiao/MIGRATION.md)
 - [Troubleshooting](../docs/yiqiao/TROUBLESHOOTING.md)
-- [Public connector configuration, security, and operation](../docs/yiqiao/PUBLIC_CONNECTOR.md)
 - [Security policy](../SECURITY.md)
 - [API add/search examples](../README.md#verify-memory-add-and-search)

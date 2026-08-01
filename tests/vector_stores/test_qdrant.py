@@ -993,7 +993,7 @@ class TestQdrantDatetimeRangeFilters(unittest.TestCase):
 
     def test_missing_fastembed_warns_with_extras_install_hint(self):
         """When fastembed is missing, the BM25 warning must point at the YiQiao optional group
-        that actually provides it (`yiqiao-memory[extras]`), not the bare `fastembed` package -
+        that actually provides it (`yiqiao[extras]`), not the bare `fastembed` package -
         fastembed is declared under [extras], so that is the discoverable install path."""
         self.qdrant._bm25_encoder = None
         # Setting the module to None in sys.modules makes `from fastembed import ...` raise ImportError.
@@ -1003,6 +1003,6 @@ class TestQdrantDatetimeRangeFilters(unittest.TestCase):
         self.assertIsNone(result)  # encoder unavailable -> None
         self.assertIs(self.qdrant._bm25_encoder, False)  # sentinel: tried and failed, do not retry
         joined = "\n".join(cm.output)
-        self.assertIn("yiqiao-memory[extras]", joined)  # points at the right install
+        self.assertIn("yiqiao[extras]", joined)  # points at the right install
         self.assertNotIn("pip install fastembed", joined)  # not the bare package
         self.assertNotIn("\u2014", joined)  # no em-dash

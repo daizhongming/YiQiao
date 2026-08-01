@@ -98,10 +98,7 @@ $generatedKeys = New-Object "System.Collections.Generic.List[string]"
 foreach ($key in @(
     "POSTGRES_PASSWORD",
     "NEO4J_PASSWORD",
-    "JWT_SECRET",
-    "OAUTH_DEVICE_CODE_SECRET",
-    "OAUTH_AUDIT_HMAC_SECRET",
-    "OAUTH_PROXY_HMAC_SECRET"
+    "JWT_SECRET"
 )) {
     if (Set-MissingSecret $key) {
         $generatedKeys.Add($key)

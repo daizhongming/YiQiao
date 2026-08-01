@@ -11,8 +11,6 @@
   YiQiao release layout.
 - [Troubleshooting](TROUBLESHOOTING.md): startup, authentication, provider,
   database, graph, and import diagnostics.
-- [Public connector](PUBLIC_CONNECTOR.md): issuer configuration, OAuth Device
-  Flow, application registration, scopes, revocation, cleanup, and security.
 - [Secret scanning](SECURITY_AUDIT.md): current-tree policy, reviewed historical
   fingerprints, and reproducible Gitleaks commands.
 - [Licensing and provenance](LEGAL.md): licensing, provenance, third-party
