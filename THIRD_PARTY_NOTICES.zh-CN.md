@@ -50,9 +50,9 @@ YiQiao 包含来自 Mem0 开源项目（<https://github.com/mem0ai/mem0>）的�
 `@reduxjs/toolkit`、`@tanstack/react-table`、`axios`、`clsx`、`cmdk`、`date-fns`、
 `framer-motion`、`lodash`、`next`、`next-themes`、`react`、
 `react-copy-to-clipboard`、`react-day-picker`、`react-dom`、
-`react-force-graph-3d`、`react-hook-form`、`react-redux`、
+`react-force-graph-2d`、`react-hook-form`、`react-redux`、
 `react-syntax-highlighter`、`recharts`、`redux`、`sonner`、`tailwind-merge`、
-`tailwindcss-animate`、`three`、`use-debounce`、`uuid`、`vaul` 和 `zod`。
+`tailwindcss-animate`、`use-debounce`、`uuid`、`vaul` 和 `zod`。
 
 其他直接运行时依赖的许可证如下：
 

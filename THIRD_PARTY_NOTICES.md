@@ -57,9 +57,9 @@ The following direct runtime packages are MIT licensed:
 `@reduxjs/toolkit`, `@tanstack/react-table`, `axios`, `clsx`, `cmdk`, `date-fns`,
 `framer-motion`, `lodash`, `next`, `next-themes`, `react`,
 `react-copy-to-clipboard`, `react-day-picker`, `react-dom`,
-`react-force-graph-3d`, `react-hook-form`, `react-redux`,
+`react-force-graph-2d`, `react-hook-form`, `react-redux`,
 `react-syntax-highlighter`, `recharts`, `redux`, `sonner`, `tailwind-merge`,
-`tailwindcss-animate`, `three`, `use-debounce`, `uuid`, `vaul`, and `zod`.
+`tailwindcss-animate`, `use-debounce`, `uuid`, `vaul`, and `zod`.
 
 Additional direct runtime licenses:
 

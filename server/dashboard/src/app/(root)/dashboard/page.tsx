@@ -3,25 +3,24 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import {
   ArrowRight,
   BookOpen,
   CalendarDays,
   CircleHelp,
   Database,
-  ExternalLink,
   MessageSquare,
   Search,
   SlidersHorizontal,
   Sparkles,
   Users,
 } from "lucide-react";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
   Area,
   CartesianGrid,
   ComposedChart,
-  Legend,
   Line,
   ResponsiveContainer,
   Tooltip as ChartTooltip,
@@ -65,19 +64,26 @@ type DashboardPoint = UsageSummary["series"][number] & {
   runs: number;
 };
 
+type ChartTooltipItem = {
+  color?: string;
+  dataKey?: string | number;
+  name?: string | number;
+  value?: string | number;
+};
+
 const REQUEST_COLORS = {
-  total: "#6d5dfc",
-  writes: "#0f766e",
-  searches: "#2563eb",
-  other: "#ca8a04",
+  total: "#806849",
+  writes: "#16806f",
+  searches: "#3977b8",
+  other: "#b9792e",
 } as const;
 
 const ENTITY_COLORS = {
-  total: "#6d5dfc",
-  users: "#2563eb",
-  agents: "#0f766e",
-  apps: "#ca8a04",
-  runs: "#dc2626",
+  total: "#806849",
+  users: "#3977b8",
+  agents: "#16806f",
+  apps: "#b9792e",
+  runs: "#bb5555",
 } as const;
 
 function formatMetric(value: number, language: "en" | "zh") {
@@ -131,8 +137,6 @@ function buildDashboardSeries(
       cursor += 1;
     }
 
-    const totalEntities =
-      counts.users + counts.agents + counts.apps + counts.runs;
     return {
       ...point,
       label: format(
@@ -144,14 +148,15 @@ function buildDashboardSeries(
         0,
         point.api_requests - point.memory_writes - point.memory_searches,
       ),
-      total_entities: totalEntities,
+      total_entities: counts.users + counts.agents + counts.apps + counts.runs,
       ...counts,
     };
   });
 }
 
 export default function DashboardPage() {
-  const { language } = useI18n();
+  const { language, t } = useI18n();
+  const reduceMotion = useReducedMotion();
   const dateLocale = language === "zh" ? zhCN : enUS;
   const [preset, setPreset] = useState<RangePreset>("7");
   const [dateRange, setDateRange] = useState<DateRange>();
@@ -219,34 +224,36 @@ export default function DashboardPage() {
 
   const metrics = [
     {
-      label: "Total Memories",
+      label: t("Total Memories"),
       value: formatMetric(summary?.totals.stored_memories ?? 0, language),
-      detail: "Memories currently stored in this project.",
+      detail: t("Memories currently stored in this project."),
       icon: Database,
-      tone: "bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300",
+      tone: "memory",
     },
     {
-      label: `Retrieval API Usage (${rangeDescription})`,
+      label: t(`Retrieval API Usage (${rangeDescription})`),
       value: retrievalPolicy
         ? `${Math.round(retrievalPolicy.percent ?? 0)}%`
-        : "Unlimited",
-      detail: "Retrieval events as a percentage of the active project limit.",
+        : t("Unlimited"),
+      detail: t(
+        "Retrieval events as a percentage of the active project limit.",
+      ),
       icon: Search,
-      tone: "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300",
+      tone: "usage",
     },
     {
-      label: "Retrieval Events",
+      label: t("Retrieval Events"),
       value: formatMetric(summary?.totals.memory_searches ?? 0, language),
-      detail: `Successful memory retrievals across ${rangeDescription}.`,
+      detail: t(`Successful memory retrievals across ${rangeDescription}.`),
       icon: Sparkles,
-      tone: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300",
+      tone: "retrieval",
     },
     {
-      label: "Add Events",
+      label: t("Add Events"),
       value: formatMetric(summary?.totals.memory_writes ?? 0, language),
-      detail: `Successful memory writes across ${rangeDescription}.`,
+      detail: t(`Successful memory writes across ${rangeDescription}.`),
       icon: SlidersHorizontal,
-      tone: "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300",
+      tone: "write",
     },
   ];
 
@@ -263,125 +270,175 @@ export default function DashboardPage() {
     }
   };
 
-  return (
-    <div className="mx-auto w-full max-w-[1440px] space-y-6 pb-4">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
-          <PopoverTrigger asChild>
-            <Button
-              variant="outline"
-              className={cn(
-                "w-full justify-between font-normal sm:w-auto sm:min-w-[220px]",
-                preset === "custom" && "border-onSurface-default-primary",
-              )}
-            >
-              <span className="truncate">
-                {dateRange?.from && dateRange.to
-                  ? `${format(dateRange.from, "MMM d, yyyy", { locale: dateLocale })} - ${format(dateRange.to, "MMM d, yyyy", { locale: dateLocale })}`
-                  : "Pick a date range"}
-              </span>
-              <CalendarDays className="ml-3 size-4 shrink-0 text-onSurface-default-tertiary" />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent align="start" className="w-auto rounded-lg p-0">
-            <Calendar
-              initialFocus
-              mode="range"
-              defaultMonth={dateRange?.from}
-              selected={dateRange}
-              onSelect={selectDateRange}
-              numberOfMonths={1}
-              disabled={{ after: new Date() }}
-            />
-          </PopoverContent>
-        </Popover>
+  const enter = (delay = 0) => ({
+    initial: reduceMotion ? false : { opacity: 0, y: 12 },
+    animate: { opacity: 1, y: 0 },
+    transition: {
+      duration: reduceMotion ? 0 : 0.32,
+      delay: reduceMotion ? 0 : delay,
+      ease: [0.22, 1, 0.36, 1] as const,
+    },
+  });
 
-        <div
-          className="grid h-9 w-full grid-cols-4 rounded-md border border-memBorder-primary bg-surface-default-secondary p-0.5 sm:flex sm:w-auto sm:self-auto"
-          aria-label="Dashboard date range"
-        >
-          {[
-            ["all", language === "zh" ? "全部时间" : "All Time"],
-            ["1", language === "zh" ? "1 天" : "1d"],
-            ["7", language === "zh" ? "7 天" : "7d"],
-            ["30", language === "zh" ? "30 天" : "30d"],
-          ].map(([value, label]) => (
-            <button
-              key={value}
-              type="button"
-              onClick={() =>
-                applyPreset(value as Exclude<RangePreset, "custom">)
-              }
-              className={cn(
-                "h-8 min-w-0 rounded px-2 text-xs font-semibold text-onSurface-default-secondary transition-colors sm:min-w-16 sm:px-3",
-                preset === value
-                  ? "bg-surface-default-primary text-onSurface-default-primary shadow-sm"
-                  : "hover:bg-surface-default-tertiary-hover",
-              )}
-              aria-pressed={preset === value}
-            >
-              {label}
-            </button>
-          ))}
+  return (
+    <div className="dashboard-overview mx-auto w-full max-w-[1440px] space-y-5 pb-4">
+      <motion.header
+        {...enter()}
+        className="dashboard-overview-header flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between"
+      >
+        <div className="min-w-0">
+          <p className="text-xs font-semibold text-onSurface-default-tertiary">
+            {t("Workspace")}
+          </p>
+          <h1 className="mt-1 text-2xl font-semibold text-onSurface-default-primary">
+            {t("Overview")}
+          </h1>
+          <p className="mt-1 max-w-2xl text-sm text-onSurface-default-secondary">
+            {t("Monitor memory activity and project health at a glance.")}
+          </p>
         </div>
-      </div>
+
+        <div className="flex w-full flex-col-reverse gap-2 sm:flex-row sm:items-center lg:w-auto">
+          <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                className={cn(
+                  "dashboard-date-trigger h-10 w-full justify-between font-normal sm:w-auto sm:max-w-[300px] sm:min-w-[220px]",
+                  preset === "custom" && "is-active",
+                )}
+              >
+                <CalendarDays className="mr-2 size-4 shrink-0 text-onSurface-default-tertiary" />
+                <span className="min-w-0 flex-1 truncate text-left">
+                  {dateRange?.from && dateRange.to
+                    ? `${format(dateRange.from, "MMM d, yyyy", { locale: dateLocale })} - ${format(dateRange.to, "MMM d, yyyy", { locale: dateLocale })}`
+                    : t("Pick a date range")}
+                </span>
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-auto rounded-lg p-0">
+              <Calendar
+                initialFocus
+                mode="range"
+                defaultMonth={dateRange?.from}
+                selected={dateRange}
+                onSelect={selectDateRange}
+                numberOfMonths={1}
+                disabled={{ after: new Date() }}
+              />
+            </PopoverContent>
+          </Popover>
+
+          <div
+            className="dashboard-range-control grid h-10 w-full grid-cols-4 p-0.5 sm:w-auto"
+            aria-label={t("Dashboard date range")}
+          >
+            {(
+              [
+                ["all", t("All Time")],
+                ["1", t("1 day")],
+                ["7", t("7 days")],
+                ["30", t("30 days")],
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => applyPreset(value)}
+                className="relative h-9 min-w-0 rounded px-2 text-xs font-semibold text-onSurface-default-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-w-16 sm:px-3"
+                aria-pressed={preset === value}
+              >
+                {preset === value && (
+                  <motion.span
+                    layoutId="dashboard-active-range"
+                    className="absolute inset-0 rounded bg-surface-default-primary shadow-[var(--yiqiao-shadow-sm)]"
+                    transition={{
+                      duration: reduceMotion ? 0 : 0.22,
+                      ease: [0.22, 1, 0.36, 1],
+                    }}
+                  />
+                )}
+                <span className="relative z-10 block truncate">{label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </motion.header>
 
       {(summaryError || entitiesError) && (
-        <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200">
+        <div
+          role="alert"
+          className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200"
+        >
           {summaryError || entitiesError}
         </div>
       )}
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {metrics.map((metric) => (
-          <Card key={metric.label} className="min-h-[132px] rounded-lg">
-            <CardContent className="flex h-full items-start justify-between gap-4 p-5">
-              <div className="min-w-0">
-                <div className="flex min-h-10 items-start gap-1.5 text-sm leading-5 text-onSurface-default-secondary">
-                  <metric.icon className="mt-0.5 size-4 shrink-0" />
-                  <span className="min-w-0 break-words">{metric.label}</span>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button
-                        type="button"
-                        aria-label={`About ${metric.label}`}
-                        className="mt-0.5 shrink-0 text-onSurface-default-tertiary"
-                      >
-                        <CircleHelp className="size-3.5" />
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent className="max-w-64">
-                      {metric.detail}
-                    </TooltipContent>
-                  </Tooltip>
+        {metrics.map((metric, index) => (
+          <motion.div key={metric.label} {...enter(0.05 + index * 0.045)}>
+            <Card
+              className="dashboard-metric-card h-[136px] overflow-hidden"
+              data-tone={metric.tone}
+            >
+              <CardContent className="relative flex h-full items-start justify-between gap-4 p-5">
+                <div className="min-w-0">
+                  <div className="flex min-h-10 items-start gap-1.5 text-sm leading-5 text-onSurface-default-secondary">
+                    <span className="min-w-0 break-words">{metric.label}</span>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          aria-label={t("Metric information")}
+                          className="mt-0.5 shrink-0 rounded-sm text-onSurface-default-tertiary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        >
+                          <CircleHelp className="size-3.5" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent className="max-w-64">
+                        {metric.detail}
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
+                  <div className="mt-3 h-10 overflow-hidden">
+                    {loading ? (
+                      <Skeleton className="mt-1 h-8 w-24" />
+                    ) : (
+                      <AnimatePresence mode="wait" initial={false}>
+                        <motion.p
+                          key={metric.value}
+                          initial={reduceMotion ? false : { opacity: 0, y: 8 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={
+                            reduceMotion ? undefined : { opacity: 0, y: -8 }
+                          }
+                          transition={{ duration: reduceMotion ? 0 : 0.2 }}
+                          className="break-words text-3xl font-semibold tabular-nums"
+                        >
+                          {metric.value}
+                        </motion.p>
+                      </AnimatePresence>
+                    )}
+                  </div>
                 </div>
-                {loading ? (
-                  <Skeleton className="mt-5 h-9 w-24" />
-                ) : (
-                  <p className="mt-4 break-words text-3xl font-semibold tabular-nums">
-                    {metric.value}
-                  </p>
-                )}
-              </div>
-              <div
-                className={cn(
-                  "flex size-9 shrink-0 items-center justify-center rounded-md",
-                  metric.tone,
-                )}
-              >
-                <metric.icon className="size-4" />
-              </div>
-            </CardContent>
-          </Card>
+                <div className="dashboard-metric-icon flex size-10 shrink-0 items-center justify-center rounded-md">
+                  <metric.icon className="size-4.5" />
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
         ))}
       </div>
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+      <motion.div
+        {...enter(0.22)}
+        className="grid grid-cols-1 gap-4 xl:grid-cols-2"
+      >
         <ActivityChart
-          title="Requests"
+          title={t("Requests")}
           total={summary?.totals.api_requests ?? 0}
           href="/dashboard/requests"
-          linkLabel="View Requests"
+          linkLabel={t("View Requests")}
           data={chartData}
           loading={loading}
           breakdown={requestBreakdown}
@@ -389,58 +446,62 @@ export default function DashboardPage() {
           type="requests"
         />
         <ActivityChart
-          title="Entities"
+          title={t("Entities")}
           total={totalEntities}
           href="/dashboard/entities"
-          linkLabel="View Entities"
+          linkLabel={t("View Entities")}
           data={chartData}
           loading={loading}
           breakdown={entityBreakdown}
           onBreakdownChange={setEntityBreakdown}
           type="entities"
         />
-      </div>
+      </motion.div>
 
-      <section className="space-y-4 pt-2">
+      <motion.section {...enter(0.28)} className="space-y-3 pt-1">
         <div>
-          <h2 className="text-lg font-semibold">Explore the Platform</h2>
+          <h2 className="text-base font-semibold">
+            {t("Explore the Platform")}
+          </h2>
           <p className="mt-1 text-sm text-onSurface-default-secondary">
-            Get the most out of YiQiao: tune it, see it in action, and ship
-            faster.
+            {t(
+              "Get the most out of YiQiao: tune it, see it in action, and ship faster.",
+            )}
           </p>
         </div>
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
           <ExploreCard
             href="/dashboard/settings/extraction"
-            title="Customize YiQiao"
-            description="Set what YiQiao remembers, how it is organized, and when it is used."
-            action="Try it"
+            title={t("Customize YiQiao")}
+            description={t(
+              "Set what YiQiao remembers, how it is organized, and when it is used.",
+            )}
+            action={t("Try it")}
             icon={SlidersHorizontal}
-            suggested
+            featured
           />
-          <ExploreCard
-            href="/dashboard/install"
-            title="Integration Examples"
-            description="See real integration examples and patterns to add memory to your product."
-            action="Open"
-            icon={Sparkles}
-          />
-          <ExploreCard
-            href="/playground"
-            title="Try the Playground"
-            description="Test memory addition and retrieval live before wiring it into your app."
-            action="Try it"
-            icon={MessageSquare}
-          />
-          <ExploreCard
-            href="/dashboard/install"
-            title="Quick Start"
-            description="Use tested examples to add and search memories from your application."
-            action="View"
-            icon={BookOpen}
-          />
+          <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
+            <ExploreCard
+              href="/dashboard/install"
+              title={t("Integration Examples")}
+              action={t("Open")}
+              icon={Sparkles}
+            />
+            <ExploreCard
+              href="/playground"
+              title={t("Try the Playground")}
+              action={t("Try it")}
+              icon={MessageSquare}
+            />
+            <ExploreCard
+              href="/dashboard/install"
+              title={t("Quick Start")}
+              action={t("View")}
+              icon={BookOpen}
+            />
+          </div>
         </div>
-      </section>
+      </motion.section>
     </div>
   );
 }
@@ -466,174 +527,249 @@ function ActivityChart({
   onBreakdownChange: (value: boolean) => void;
   type: "requests" | "entities";
 }) {
-  const { language } = useI18n();
+  const { language, t } = useI18n();
+  const reduceMotion = useReducedMotion();
+  const gradientId = `dashboard-${type}-${useId().replace(/:/g, "")}`;
+  const series =
+    type === "requests"
+      ? [
+          {
+            key: "memory_writes",
+            label: t("Add"),
+            color: REQUEST_COLORS.writes,
+          },
+          {
+            key: "memory_searches",
+            label: t("Retrieval"),
+            color: REQUEST_COLORS.searches,
+          },
+          {
+            key: "other_requests",
+            label: t("Other"),
+            color: REQUEST_COLORS.other,
+          },
+        ]
+      : [
+          { key: "users", label: t("Users"), color: ENTITY_COLORS.users },
+          { key: "agents", label: t("Agents"), color: ENTITY_COLORS.agents },
+          { key: "apps", label: t("Apps"), color: ENTITY_COLORS.apps },
+          { key: "runs", label: t("Runs"), color: ENTITY_COLORS.runs },
+        ];
+  const totalColor =
+    type === "requests" ? REQUEST_COLORS.total : ENTITY_COLORS.total;
+  const totalKey = type === "requests" ? "api_requests" : "total_entities";
+
   return (
-    <Card className="overflow-hidden rounded-lg">
+    <Card className="dashboard-chart-card overflow-hidden">
       <CardContent className="p-0">
-        <div className="flex flex-wrap items-center justify-between gap-4 px-4 pb-3 pt-4 sm:px-5 sm:pt-5">
+        <div className="flex min-h-[92px] flex-wrap items-start justify-between gap-3 px-4 pb-3 pt-4 sm:px-5 sm:pt-5">
           <div className="min-w-0">
-            <h3 className="text-sm font-semibold">{title}</h3>
+            <h3 className="text-sm font-medium text-onSurface-default-secondary">
+              {title}
+            </h3>
             {loading ? (
-              <Skeleton className="mt-2 h-6 w-20" />
+              <Skeleton className="mt-2 h-7 w-20" />
             ) : (
-              <p className="mt-1 text-xl font-semibold tabular-nums">
+              <p className="mt-1 text-2xl font-semibold tabular-nums">
                 {formatMetric(total, language)}
               </p>
             )}
           </div>
-          <Button asChild variant="outline" size="sm">
+          <Button asChild variant="ghost" size="sm" className="-mr-2">
             <Link href={href}>
               {linkLabel}
               <ArrowRight className="ml-1.5 size-3.5" />
             </Link>
           </Button>
+          <AnimatePresence initial={false}>
+            {breakdown && (
+              <motion.div
+                initial={reduceMotion ? false : { opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={reduceMotion ? undefined : { opacity: 0, y: -4 }}
+                transition={{ duration: reduceMotion ? 0 : 0.18 }}
+                className="flex w-full flex-wrap gap-x-4 gap-y-1"
+                aria-label={t("Chart legend")}
+              >
+                {series.map((item) => (
+                  <span
+                    key={item.key}
+                    className="flex items-center gap-1.5 text-[11px] text-onSurface-default-secondary"
+                  >
+                    <span
+                      className="size-2 rounded-full"
+                      style={{ backgroundColor: item.color }}
+                    />
+                    {item.label}
+                  </span>
+                ))}
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
-        <div className="h-[270px] w-full px-2">
+        <div className="relative h-[252px] w-full px-2">
           {loading ? (
-            <Skeleton className="h-full w-full" />
+            <Skeleton className="h-full w-full rounded-none" />
+          ) : data.length === 0 ? (
+            <div className="grid h-full place-items-center text-sm text-onSurface-default-tertiary">
+              {t("No activity in this range")}
+            </div>
           ) : (
-            <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart
-                data={data}
-                margin={{ top: 12, right: 14, bottom: 4, left: -18 }}
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.div
+                key={breakdown ? "breakdown" : "total"}
+                initial={reduceMotion ? false : { opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={reduceMotion ? undefined : { opacity: 0 }}
+                transition={{ duration: reduceMotion ? 0 : 0.2 }}
+                className="h-full w-full"
               >
-                <CartesianGrid
-                  strokeDasharray="3 3"
-                  vertical={false}
-                  opacity={0.22}
-                />
-                <XAxis
-                  dataKey="label"
-                  tick={{ fontSize: 11 }}
-                  minTickGap={28}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <YAxis
-                  allowDecimals={false}
-                  tick={{ fontSize: 11 }}
-                  axisLine={false}
-                  tickLine={false}
-                  width={48}
-                />
-                <ChartTooltip
-                  contentStyle={{
-                    borderRadius: 8,
-                    borderColor: "var(--mem-border-primary)",
-                    fontSize: 12,
-                  }}
-                />
-                {breakdown && <Legend wrapperStyle={{ fontSize: 11 }} />}
-                {type === "requests" ? (
-                  breakdown ? (
-                    <>
-                      <Line
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart
+                    data={data}
+                    margin={{ top: 12, right: 14, bottom: 4, left: -18 }}
+                  >
+                    <defs>
+                      <linearGradient
+                        id={gradientId}
+                        x1="0"
+                        y1="0"
+                        x2="0"
+                        y2="1"
+                      >
+                        <stop
+                          offset="0%"
+                          stopColor={totalColor}
+                          stopOpacity={0.3}
+                        />
+                        <stop
+                          offset="100%"
+                          stopColor={totalColor}
+                          stopOpacity={0.02}
+                        />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid
+                      stroke="var(--mem-border-primary)"
+                      vertical={false}
+                      opacity={0.7}
+                    />
+                    <XAxis
+                      dataKey="label"
+                      tick={{
+                        fontSize: 11,
+                        fill: "var(--on-surface-default-tertiary)",
+                      }}
+                      minTickGap={28}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <YAxis
+                      allowDecimals={false}
+                      tick={{
+                        fontSize: 11,
+                        fill: "var(--on-surface-default-tertiary)",
+                      }}
+                      axisLine={false}
+                      tickLine={false}
+                      width={48}
+                    />
+                    <ChartTooltip content={<DashboardChartTooltip />} />
+                    {breakdown ? (
+                      series.map((item) => (
+                        <Line
+                          key={item.key}
+                          type="monotone"
+                          dataKey={item.key}
+                          name={item.label}
+                          stroke={item.color}
+                          strokeWidth={2}
+                          dot={false}
+                          activeDot={{ r: 3 }}
+                          isAnimationActive={!reduceMotion}
+                          animationDuration={420}
+                        />
+                      ))
+                    ) : (
+                      <Area
                         type="monotone"
-                        dataKey="memory_writes"
-                        name="Add"
-                        stroke={REQUEST_COLORS.writes}
-                        strokeWidth={2}
+                        dataKey={totalKey}
+                        name={title}
+                        stroke={totalColor}
+                        fill={`url(#${gradientId})`}
+                        strokeWidth={2.25}
                         dot={false}
+                        activeDot={{ r: 3 }}
+                        isAnimationActive={!reduceMotion}
+                        animationDuration={420}
                       />
-                      <Line
-                        type="monotone"
-                        dataKey="memory_searches"
-                        name="Retrieval"
-                        stroke={REQUEST_COLORS.searches}
-                        strokeWidth={2}
-                        dot={false}
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="other_requests"
-                        name="Other"
-                        stroke={REQUEST_COLORS.other}
-                        strokeWidth={2}
-                        dot={false}
-                      />
-                    </>
-                  ) : (
-                    <Area
-                      type="monotone"
-                      dataKey="api_requests"
-                      name="Requests"
-                      stroke={REQUEST_COLORS.total}
-                      fill={REQUEST_COLORS.total}
-                      fillOpacity={0.1}
-                      strokeWidth={2}
-                      dot={false}
-                    />
-                  )
-                ) : breakdown ? (
-                  <>
-                    <Line
-                      type="monotone"
-                      dataKey="users"
-                      name="Users"
-                      stroke={ENTITY_COLORS.users}
-                      strokeWidth={2}
-                      dot={false}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="agents"
-                      name="Agents"
-                      stroke={ENTITY_COLORS.agents}
-                      strokeWidth={2}
-                      dot={false}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="apps"
-                      name="Apps"
-                      stroke={ENTITY_COLORS.apps}
-                      strokeWidth={2}
-                      dot={false}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="runs"
-                      name="Runs"
-                      stroke={ENTITY_COLORS.runs}
-                      strokeWidth={2}
-                      dot={false}
-                    />
-                  </>
-                ) : (
-                  <Area
-                    type="monotone"
-                    dataKey="total_entities"
-                    name="Entities"
-                    stroke={ENTITY_COLORS.total}
-                    fill={ENTITY_COLORS.total}
-                    fillOpacity={0.1}
-                    strokeWidth={2}
-                    dot={false}
-                  />
-                )}
-              </ComposedChart>
-            </ResponsiveContainer>
+                    )}
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </motion.div>
+            </AnimatePresence>
           )}
         </div>
 
         <div className="flex min-h-12 flex-wrap items-center justify-between gap-3 border-t border-memBorder-primary px-4 py-3 sm:px-5">
-          <span className="text-[11px] font-semibold uppercase text-onSurface-default-tertiary">
-            {language === "zh"
-              ? `${title === "Requests" ? "请求" : "实体"}总数`
-              : `Total ${title}`}
+          <span className="text-[11px] font-semibold text-onSurface-default-tertiary">
+            {t(type === "requests" ? "Total Requests" : "Total Entities")}
           </span>
-          <label className="flex items-center gap-2 text-xs text-onSurface-default-secondary">
-            View Breakdown
+          <label className="flex min-h-8 cursor-pointer items-center gap-2 text-xs text-onSurface-default-secondary">
+            {t("View Breakdown")}
             <Switch
               checked={breakdown}
               onCheckedChange={onBreakdownChange}
-              aria-label={`View ${title.toLowerCase()} breakdown`}
+              aria-label={t(
+                type === "requests"
+                  ? "View requests breakdown"
+                  : "View entities breakdown",
+              )}
             />
           </label>
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+function DashboardChartTooltip({
+  active,
+  payload,
+  label,
+}: {
+  active?: boolean;
+  payload?: ChartTooltipItem[];
+  label?: string | number;
+}) {
+  if (!active || !payload?.length) return null;
+
+  return (
+    <div className="dashboard-chart-tooltip min-w-36 rounded-md border px-3 py-2 shadow-[var(--yiqiao-shadow-md)]">
+      <p className="mb-1.5 text-xs font-medium text-onSurface-default-primary">
+        {label}
+      </p>
+      <div className="space-y-1">
+        {payload.map((item) => (
+          <div
+            key={String(item.dataKey)}
+            className="flex items-center justify-between gap-5 text-xs"
+          >
+            <span className="flex items-center gap-1.5 text-onSurface-default-secondary">
+              <span
+                className="size-2 rounded-full"
+                style={{ backgroundColor: item.color }}
+              />
+              {item.name}
+            </span>
+            <span className="font-semibold tabular-nums text-onSurface-default-primary">
+              {item.value}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -643,46 +779,57 @@ function ExploreCard({
   description,
   action,
   icon: Icon,
-  suggested = false,
-  external = false,
+  featured = false,
 }: {
   href: string;
   title: string;
-  description: string;
+  description?: string;
   action: string;
   icon: typeof Users;
-  suggested?: boolean;
-  external?: boolean;
+  featured?: boolean;
 }) {
   return (
     <Link
       href={href}
-      target={external ? "_blank" : undefined}
-      rel={external ? "noreferrer" : undefined}
-      className="group relative flex min-h-[190px] flex-col rounded-lg border border-memBorder-primary bg-surface-default-primary p-5 transition-colors hover:bg-surface-default-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className={cn(
+        "dashboard-explore-card group relative flex border border-memBorder-primary bg-surface-default-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        featured
+          ? "min-h-[168px] flex-col justify-between p-5 sm:p-6"
+          : "min-h-[82px] items-center gap-3 p-4",
+      )}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex size-9 items-center justify-center rounded-md bg-surface-default-tertiary text-onSurface-default-primary">
-          <Icon className="size-4" />
+      <div
+        className={cn(
+          "dashboard-explore-icon flex shrink-0 items-center justify-center rounded-md",
+          featured ? "size-11" : "size-9",
+        )}
+      >
+        <Icon className={featured ? "size-5" : "size-4"} />
+      </div>
+      <div className={cn("min-w-0", featured ? "mt-5" : "flex-1")}>
+        <div className="flex items-center justify-between gap-3">
+          <h3
+            className={cn("font-semibold", featured ? "text-base" : "text-sm")}
+          >
+            {title}
+          </h3>
+          {!featured && (
+            <ArrowRight className="size-4 shrink-0 text-onSurface-default-tertiary transition-transform group-hover:translate-x-0.5" />
+          )}
         </div>
-        {suggested && (
-          <span className="rounded bg-violet-50 px-2 py-1 text-[10px] font-semibold text-violet-700 dark:bg-violet-950/40 dark:text-violet-300">
-            Suggested
+        {description && (
+          <p className="mt-2 max-w-xl text-sm leading-5 text-onSurface-default-secondary">
+            {description}
+          </p>
+        )}
+        {featured && (
+          <span className="mt-4 flex items-center gap-1.5 text-xs font-semibold text-onSurface-default-primary">
+            {action}
+            <ArrowRight className="size-3.5 transition-transform group-hover:translate-x-0.5" />
           </span>
         )}
       </div>
-      <h3 className="mt-4 text-sm font-semibold">{title}</h3>
-      <p className="mt-2 flex-1 text-sm leading-5 text-onSurface-default-secondary">
-        {description}
-      </p>
-      <span className="mt-4 flex items-center gap-1.5 text-xs font-semibold text-onSurface-default-primary">
-        {action}
-        {external ? (
-          <ExternalLink className="size-3.5" />
-        ) : (
-          <ArrowRight className="size-3.5 transition-transform group-hover:translate-x-0.5" />
-        )}
-      </span>
+      {!featured && <span className="sr-only">{action}</span>}
     </Link>
   );
 }

@@ -5,8 +5,7 @@
 
 YiQiao 是面向 AI 助手与智能体的自托管记忆服务。它通过一套 Docker
 Compose 部署，提供带身份验证的 REST API、运维控制台、语义记忆与图记忆、
-聊天记录导入、数据导出、用量控制和 Webhook。通用公开客户端可以通过带 PKCE 的
-OAuth 设备流程连接，而不需要获取长期项目 API 密钥。
+聊天记录导入、数据导出、用量控制和 Webhook。集成通过项目级 API 密钥进行身份验证。
 
 ## 快速开始
 
@@ -124,10 +123,10 @@ Invoke-RestMethod -Method Post -Uri "$apiUrl/search" -Headers $headers -ContentT
 
 ## Python 入口
 
-从仓库源码安装 Python 包：
+安装已发布的 Python 包：
 
 ```bash
-python -m pip install .
+python -m pip install yiqiao
 ```
 
 YiQiao 对外提供同步和异步两种 Python 入口：
@@ -149,8 +148,6 @@ from yiqiao import Memory, AsyncMemory
 - 在浏览器中配置镜像内置的 LLM 与嵌入适配器，并支持自定义 OpenAI 兼容地址。
 - 默认启用身份验证，支持管理员引导、项目 API 密钥、按角色控制工作区访问权限和
   请求日志。
-- 支持公共服务连接器协议 `1.0` 发现、绑定项目的 OAuth 设备流程、刷新令牌轮换和
-  已连接应用撤销。
 - 支持带进度显示、重试、取消和存储配额的聊天记录导入。
 
 典型使用场景包括持久化助手偏好、客户支持上下文、研究记忆、编码智能体上下文，
@@ -187,10 +184,6 @@ from yiqiao import Memory, AsyncMemory
 服务不映射到主机端口，并确保密钥不进入版本控制。不要将 API 或控制台直接暴露到
 互联网；请通过可信的反向代理终止 TLS，并将访问限制在预期网络中。
 
-公开客户端接入时，应将 `OAUTH_ISSUER` 与 `PUBLIC_DASHBOARD_URL` 设置为同一个外部
-HTTPS 来源。应用登记、发现、代理、作用域、撤销、清理和安全要求见
-[公共连接器指南](docs/yiqiao/PUBLIC_CONNECTOR.zh-CN.md)。
-
 端口、持久化、备份、升级、源码构建和卸载说明见
 [运维指南](docs/yiqiao/OPERATIONS.zh-CN.md)。
 
@@ -199,7 +192,6 @@ HTTPS 来源。应用登记、发现、代理、作用域、撤销、清理和�
 - [运维指南](docs/yiqiao/OPERATIONS.zh-CN.md)
 - [迁移指南](docs/yiqiao/MIGRATION.zh-CN.md)
 - [故障排查](docs/yiqiao/TROUBLESHOOTING.zh-CN.md)
-- [公共连接器](docs/yiqiao/PUBLIC_CONNECTOR.zh-CN.md)
 - [许可与来源说明](docs/yiqiao/LEGAL.zh-CN.md)
 - [安全策略](SECURITY.zh-CN.md)
 - [贡献指南](CONTRIBUTING.zh-CN.md)

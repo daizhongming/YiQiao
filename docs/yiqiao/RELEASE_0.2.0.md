@@ -37,8 +37,8 @@ docker compose up -d
 ```
 
 The default local Dashboard is available at `http://localhost:3000`. See
-[Operations](OPERATIONS.md), [Public Connector](PUBLIC_CONNECTOR.md), and
-[Troubleshooting](TROUBLESHOOTING.md) before exposing any service publicly.
+[Operations](OPERATIONS.md) and [Troubleshooting](TROUBLESHOOTING.md) before
+exposing any service publicly.
 
 ## Distribution Boundary
 

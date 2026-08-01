@@ -2,9 +2,10 @@
 
 "use client";
 
-import type { ComponentType, HTMLAttributes } from "react";
+import { useId, type ComponentType, type HTMLAttributes } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { motion, useReducedMotion } from "framer-motion";
 import {
   Activity,
   BookOpen,
@@ -18,7 +19,6 @@ import {
   LayoutDashboard,
   MessageSquare,
   Newspaper,
-  Link2,
   PlugZap,
   Settings,
   Users,
@@ -50,14 +50,9 @@ const GROUPS: { label: string; items: NavItem[] }[] = [
   {
     label: "SETUP",
     items: [
-      { title: "Install YiQiao", url: "/dashboard/install", icon: Box },
+      { title: "Integrations", url: "/dashboard/install", icon: Box },
       { title: "Playground", url: "/playground", icon: MessageSquare },
       { title: "API Keys", url: "/dashboard/api-keys", icon: KeyRound },
-      {
-        title: "Connected Apps",
-        url: "/dashboard/connected-apps",
-        icon: Link2,
-      },
       {
         title: "Configuration",
         url: "/dashboard/configuration",
@@ -137,6 +132,8 @@ export function MainNav({
 }) {
   const pathname = usePathname();
   const { t } = useI18n();
+  const reduceMotion = useReducedMotion();
+  const navigationId = useId().replace(/:/g, "");
 
   return (
     <Sidebar
@@ -169,7 +166,18 @@ export function MainNav({
                   const active = itemIsActive(pathname, item);
                   const content = (
                     <>
-                      <Icon className="size-4 shrink-0" />
+                      {active && (
+                        <motion.span
+                          layoutId={`dashboard-nav-active-${navigationId}`}
+                          className="dashboard-nav-active-indicator"
+                          transition={{
+                            duration: reduceMotion ? 0 : 0.24,
+                            ease: [0.22, 1, 0.36, 1],
+                          }}
+                          aria-hidden="true"
+                        />
+                      )}
+                      <Icon className="dashboard-nav-icon size-4 shrink-0" />
                       {!collapsed && (
                         <span className="min-w-0 flex-1 truncate">
                           {t(item.title)}
@@ -188,12 +196,14 @@ export function MainNav({
                         collapsed={collapsed}
                         active={active}
                         tooltip={collapsed ? t(item.title) : undefined}
+                        className="dashboard-nav-item relative min-h-9 overflow-visible"
                       >
                         {item.external ? (
                           <a
                             href={item.url}
                             target="_blank"
                             rel="noopener noreferrer"
+                            aria-current={undefined}
                             aria-label={collapsed ? t(item.title) : undefined}
                             title={collapsed ? t(item.title) : undefined}
                             onClick={onNavigate}
@@ -207,6 +217,7 @@ export function MainNav({
                         ) : (
                           <Link
                             href={item.url}
+                            aria-current={active ? "page" : undefined}
                             aria-label={collapsed ? t(item.title) : undefined}
                             title={collapsed ? t(item.title) : undefined}
                             onClick={onNavigate}

@@ -41,21 +41,6 @@ export const API_KEY_ENDPOINTS = {
   BY_ID: (keyId: string) => `/api-keys/${keyId}`,
 } as const;
 
-export const OAUTH_ENDPOINTS = {
-  DEVICE_LOOKUP: "/oauth/device-requests/lookup",
-  DEVICE_APPROVE: (requestId: string) =>
-    `/oauth/device-requests/${encodeURIComponent(requestId)}/approve`,
-  DEVICE_REJECT: (requestId: string) =>
-    `/oauth/device-requests/${encodeURIComponent(requestId)}/reject`,
-  GRANTS: "/oauth/grants",
-  GRANT_REVOKE: (grantId: string) =>
-    `/oauth/grants/${encodeURIComponent(grantId)}/revoke`,
-  GRANTS_REVOKE_BY_APPLICATION: "/oauth/grants/revoke-by-application",
-  APPLICATIONS: "/oauth/applications",
-  APPLICATION_REVOKE: (clientId: string) =>
-    `/oauth/applications/${encodeURIComponent(clientId)}/revoke`,
-} as const;
-
 export const REQUEST_ENDPOINTS = {
   BASE: "/requests",
 } as const;

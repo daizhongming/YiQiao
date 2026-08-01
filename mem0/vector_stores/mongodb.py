@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
 try:
-    _YIQIAO_VERSION = version("yiqiao-memory")
+    _YIQIAO_VERSION = version("yiqiao")
 except PackageNotFoundError:
     _YIQIAO_VERSION = "0.1.1+source"
 

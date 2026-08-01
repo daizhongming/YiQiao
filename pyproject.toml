@@ -5,8 +5,8 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "yiqiao-memory"
-version = "0.2.1"
+name = "yiqiao"
+version = "0.2.2"
 description = "YiQiao 自托管 AI 记忆核心 / Self-hosted AI memory core"
 authors = [
     { name = "YiQiao Contributors" }
@@ -137,10 +137,10 @@ packages = ["mem0", "yiqiao"]
 only-include = ["mem0", "yiqiao"]
 
 [tool.yiqiao.release]
-# This compatibility wheel is embedded in YiQiao container images. It is not
-# published independently to PyPI.
-publish = false
-channel = "container-only"
+# Publish this distribution to PyPI through the trusted workflow in
+# .github/workflows/images.yml.
+publish = true
+channel = "pypi"
 
 [tool.hatch.envs.dev_py_3_10]
 python = "3.10"

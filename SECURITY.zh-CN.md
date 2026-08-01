@@ -44,23 +44,3 @@ YiQiao 是自托管产品，运维人员需要负责：
 - 定期验证备份恢复，并监控认证日志和请求日志。
 
 默认 Compose 部署不会向主机暴露 PostgreSQL 或 Neo4j 端口。未经明确的网络与认证审查，请勿发布这些端口。
-
-## 公共连接器安全边界
-
-公共服务连接器协议 `1.0` 通过带 PKCE S256、由用户参与的 OAuth 设备授权和轮换刷新
-令牌来支持已登记的公开客户端。令牌绑定到用户、应用、受众、作用域集合和项目；运维
-人员必须在反向代理和 API 中保留这些检查，不得把范围更广的路由作为连接器资源公开。
-
-分别保护 `OAUTH_DEVICE_CODE_SECRET`、`OAUTH_AUDIT_HMAC_SECRET` 与
-`OAUTH_PROXY_HMAC_SECRET`，并确保它们不同于彼此、`JWT_SECRET` 和
-`ADMIN_API_KEY`。将应用数据库及其备份视为凭据状态，在配置的
-宽限期内保留重放证据，在每个副本上保持共享限流，并且绝不得在日志或支持信息包中写入
-令牌、设备代码或用户代码、PKCE 材料或 Authorization 请求头。
-
-控制台会覆盖调用方提供的传输身份，并对 API 限流使用的对端身份签名。仅当唯一入口
-网关把 `X-Forwarded-For` 清洗为单个客户端 IP 并实施等价的逐 IP 限流时，才可启用
-`OAUTH_GATEWAY_RATE_LIMIT_CONFIRMED`；可伪造的转发请求头不是信任边界。
-
-本版本未实现客户端凭据授权或 RFC 8693 令牌交换。MCP Streamable HTTP 只是 ADR 评估
-项，不是可用的传输或端点。服务间工作和未来 MCP 传输都不得绕过 OAuth 或项目隔离。
-完整审查契约见[密钥扫描与连接器安全审查](docs/yiqiao/SECURITY_AUDIT.zh-CN.md)。

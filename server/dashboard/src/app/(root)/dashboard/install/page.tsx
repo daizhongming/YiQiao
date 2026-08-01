@@ -1,25 +1,60 @@
+// This file was modified in 2026 by YiQiao contributors. See NOTICE.
+
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { Check, Copy, ExternalLink } from "lucide-react";
+import { useState } from "react";
+import { BookOpen, Check, Copy, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
-import {
-  buildAddMemoryCurl,
-  buildHealthCheckCurl,
-  buildSearchMemoriesCurl,
-} from "@/lib/yiqiao-api-examples";
-import { getActiveProjectId } from "@/utils/api";
 
-type SdkLanguage = "python" | "node" | "curl";
+type SdkMode = "sync" | "async";
 
-interface Step {
-  label: string;
-  code: string;
-}
+const INSTALL_COMMAND = "python -m pip install yiqiao";
+
+const SDK_EXAMPLES: Record<SdkMode, string> = {
+  sync: `from yiqiao import Memory
+
+memory = Memory()
+user_id = "alice"
+
+memory.add(
+    [{"role": "user", "content": "I prefer concise answers."}],
+    user_id=user_id,
+)
+
+memories = memory.search(
+    "How should I answer Alice?",
+    filters={"user_id": user_id},
+)
+print(memories["results"])`,
+  async: `import asyncio
+
+from yiqiao import AsyncMemory
+
+
+async def main():
+    memory = AsyncMemory()
+    user_id = "alice"
+
+    await memory.add(
+        [{"role": "user", "content": "I prefer concise answers."}],
+        user_id=user_id,
+    )
+
+    memories = await memory.search(
+        "How should I answer Alice?",
+        filters={"user_id": user_id},
+    )
+    print(memories["results"])
+
+
+asyncio.run(main())`,
+};
 
 function CopyButton({ value }: { value: string }) {
   const [copied, setCopied] = useState(false);
+  const { t } = useI18n();
 
   const copy = async () => {
     await navigator.clipboard.writeText(value);
@@ -27,35 +62,34 @@ function CopyButton({ value }: { value: string }) {
     window.setTimeout(() => setCopied(false), 1400);
   };
 
+  const label = copied ? t("Copied") : t("Copy");
+
   return (
     <Button
       type="button"
       size="sm"
       className="h-8 shrink-0"
       onClick={copy}
-      aria-label={copied ? "Copied" : "Copy command"}
-      title={copied ? "Copied" : "Copy command"}
+      aria-label={label}
+      title={label}
     >
       {copied ? (
         <Check className="mr-1.5 size-3.5" />
       ) : (
         <Copy className="mr-1.5 size-3.5" />
       )}
-      {copied ? "Copied" : "Copy"}
+      {label}
     </Button>
   );
 }
 
-function CommandStep({ label, code }: Step) {
+function CodeBlock({ code }: { code: string }) {
   return (
-    <div className="space-y-2">
-      <p className="text-xs text-onSurface-default-tertiary">{label}</p>
-      <div className="flex min-w-0 items-start gap-3 rounded-md border border-memBorder-primary bg-surface-default-secondary p-3">
-        <pre className="min-w-0 flex-1 overflow-x-auto whitespace-pre text-xs leading-5 text-onSurface-default-primary">
-          <code>{code}</code>
-        </pre>
-        <CopyButton value={code} />
-      </div>
+    <div className="flex min-w-0 items-start gap-3 rounded-md border border-memBorder-primary bg-surface-default-secondary p-3">
+      <pre className="min-w-0 flex-1 overflow-x-auto whitespace-pre text-xs leading-5 text-onSurface-default-primary">
+        <code>{code}</code>
+      </pre>
+      <CopyButton value={code} />
     </div>
   );
 }
@@ -87,118 +121,74 @@ function SegmentedButton({
 }
 
 export default function InstallPage() {
-  const [projectId, setProjectId] = useState("default-project");
-  const [sdkLanguage, setSdkLanguage] = useState<SdkLanguage>("python");
+  const [sdkMode, setSdkMode] = useState<SdkMode>("sync");
+  const { t } = useI18n();
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8888";
-
-  useEffect(() => {
-    setProjectId(getActiveProjectId());
-  }, []);
-
-  const sdkSteps = useMemo<Record<SdkLanguage, Step[]>>(
-    () => ({
-      python: [
-        { label: "Step 1: Install", code: "python -m pip install requests" },
-        {
-          label: "Step 2: Initialize",
-          code: `import requests\n\nAPI_URL = "${apiUrl}"\nHEADERS = {\n    "X-API-Key": "<your-api-key>",\n    "X-Project-ID": "${projectId}",\n    "Content-Type": "application/json",\n}`,
-        },
-        {
-          label: "Step 3: Add a memory",
-          code: `response = requests.post(\n    f"{API_URL}/memories",\n    headers=HEADERS,\n    json={\n        "messages": [{"role": "user", "content": "I prefer concise answers."}],\n        "user_id": "alice",\n    },\n)\nresponse.raise_for_status()\nprint(response.json())`,
-        },
-        {
-          label: "Step 4: Retrieve memories",
-          code: `response = requests.post(\n    f"{API_URL}/search",\n    headers=HEADERS,\n    json={\n        "query": "How should I answer Alice?",\n        "filters": {"user_id": "alice"},\n    },\n)\nresponse.raise_for_status()\nprint(response.json())`,
-        },
-      ],
-      node: [
-        {
-          label: "Step 1: Verify Node.js",
-          code: "node --version",
-        },
-        {
-          label: "Step 2: Initialize",
-          code: `const apiUrl = "${apiUrl}";\nconst headers = {\n  "X-API-Key": "<your-api-key>",\n  "X-Project-ID": "${projectId}",\n  "Content-Type": "application/json",\n};`,
-        },
-        {
-          label: "Step 3: Add a memory",
-          code: `const added = await fetch(\`${apiUrl}/memories\`, {\n  method: "POST",\n  headers,\n  body: JSON.stringify({\n    messages: [{ role: "user", content: "I prefer concise answers." }],\n    user_id: "alice",\n  }),\n});\nif (!added.ok) throw new Error(await added.text());\nconsole.log(await added.json());`,
-        },
-        {
-          label: "Step 4: Retrieve memories",
-          code: `const found = await fetch(\`${apiUrl}/search\`, {\n  method: "POST",\n  headers,\n  body: JSON.stringify({\n    query: "How should I answer Alice?",\n    filters: { user_id: "alice" },\n  }),\n});\nif (!found.ok) throw new Error(await found.text());\nconsole.log(await found.json());`,
-        },
-      ],
-      curl: [
-        {
-          label: "Step 1: Set credentials",
-          code: `YIQIAO_API_URL="${apiUrl}"\nYIQIAO_API_KEY="<your-api-key>"\nYIQIAO_PROJECT_ID="${projectId}"`,
-        },
-        {
-          label: "Step 2: Check YiQiao health",
-          code: buildHealthCheckCurl("$YIQIAO_API_URL"),
-        },
-        {
-          label: "Step 3: Add a memory",
-          code: buildAddMemoryCurl({
-            apiUrl: "$YIQIAO_API_URL",
-            apiKey: "$YIQIAO_API_KEY",
-            projectId: "$YIQIAO_PROJECT_ID",
-          }),
-        },
-        {
-          label: "Step 4: Retrieve memories",
-          code: buildSearchMemoriesCurl({
-            apiUrl: "$YIQIAO_API_URL",
-            apiKey: "$YIQIAO_API_KEY",
-            projectId: "$YIQIAO_PROJECT_ID",
-          }),
-        },
-      ],
-    }),
-    [apiUrl, projectId],
-  );
 
   return (
     <div className="mx-auto w-full max-w-[870px] space-y-6 pb-8">
-      <h1 className="text-2xl font-semibold font-fustat">Install YiQiao</h1>
-
-      <div className="inline-flex max-w-full rounded-md bg-surface-default-secondary p-1">
-        {(["python", "node", "curl"] as const).map((language) => (
-          <SegmentedButton
-            key={language}
-            active={sdkLanguage === language}
-            onClick={() => setSdkLanguage(language)}
-          >
-            {language === "node"
-              ? "Node"
-              : language === "curl"
-                ? "CURL"
-                : "Python"}
-          </SegmentedButton>
-        ))}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold font-fustat">
+            {t("YiQiao SDK")}
+          </h1>
+          <p className="mt-1 text-sm text-onSurface-default-secondary">
+            {t("Use the Python SDK in your application.")}
+          </p>
+        </div>
+        <a
+          href={`${apiUrl}/docs`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex h-9 shrink-0 items-center gap-2 self-start rounded-md border border-memBorder-primary px-3 text-xs font-medium text-onSurface-default-primary transition-colors hover:bg-surface-default-secondary"
+        >
+          <BookOpen className="size-4" />
+          {t("API Reference")}
+          <ExternalLink className="size-3.5 text-onSurface-default-tertiary" />
+        </a>
       </div>
 
-      <div className="rounded-lg border border-memBorder-primary p-4 sm:p-5">
-        <div className="mb-5 flex flex-col gap-1 text-sm text-onSurface-default-secondary sm:flex-row sm:items-center sm:justify-between">
-          <span>
-            Project: <code className="text-xs">{projectId}</code>
-          </span>
-          <a
-            href={`${apiUrl}/docs`}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex h-8 items-center gap-1.5 self-start rounded-md border border-memBorder-primary px-3 text-xs font-medium text-onSurface-default-primary hover:bg-surface-default-secondary"
-          >
-            API Docs <ExternalLink className="size-3.5" />
-          </a>
-        </div>
-        <div className="space-y-4">
-          {sdkSteps[sdkLanguage].map((step) => (
-            <CommandStep key={step.label} {...step} />
-          ))}
-        </div>
+      <div className="inline-flex max-w-full rounded-md bg-surface-default-secondary p-1">
+        <SegmentedButton
+          active={sdkMode === "sync"}
+          onClick={() => setSdkMode("sync")}
+        >
+          {t("Synchronous")}
+        </SegmentedButton>
+        <SegmentedButton
+          active={sdkMode === "async"}
+          onClick={() => setSdkMode("async")}
+        >
+          {t("Asynchronous")}
+        </SegmentedButton>
+      </div>
+
+      <div className="space-y-5 rounded-lg border border-memBorder-primary p-4 sm:p-5">
+        <section className="space-y-2">
+          <div>
+            <h2 className="text-sm font-semibold">
+              {t("Step 1: Install the SDK")}
+            </h2>
+            <p className="mt-1 text-xs text-onSurface-default-tertiary">
+              {t("Install the published YiQiao package from PyPI.")}
+            </p>
+          </div>
+          <CodeBlock code={INSTALL_COMMAND} />
+        </section>
+
+        <section className="space-y-2">
+          <div>
+            <h2 className="text-sm font-semibold">
+              {t("Step 2: Add and search memories")}
+            </h2>
+            <p className="mt-1 text-xs text-onSurface-default-tertiary">
+              {t(
+                "The SDK reads provider credentials such as OPENAI_API_KEY from your environment.",
+              )}
+            </p>
+          </div>
+          <CodeBlock code={SDK_EXAMPLES[sdkMode]} />
+        </section>
       </div>
     </div>
   );

@@ -295,36 +295,6 @@ async def verify_auth(
         return _finalize_auth(request, _resolve_user_from_api_key(token_key, request, db), db)
 
     if credentials is not None:
-        if credentials.credentials.startswith("yqoa_"):
-            request.state.suppress_request_log = True
-            _mark_auth_type(request, "oauth")
-            from oauth_service import OAuthProtocolError, authorize_resource_request
-
-            try:
-                authorization = await authorize_resource_request(
-                    db,
-                    token=credentials.credentials,
-                    request=request,
-                )
-            except OAuthProtocolError as exc:
-                from errors import request_id_var
-
-                raise HTTPException(
-                    status_code=exc.status_code,
-                    detail={
-                        "code": "oauth_service_unavailable",
-                        "message": "OAuth authorization is temporarily unavailable.",
-                        "request_id": request_id_var.get(),
-                    },
-                ) from exc
-            request.state.project_id = authorization.project_id
-            request.state.oauth_grant_id = str(authorization.grant_id)
-            request.state.oauth_access_token_hash = authorization.access_token_hash
-            request.state.oauth_audit_context = authorization.audit_context
-            request.state.oauth_client_id = authorization.client_id
-            request.state.oauth_audience = authorization.audience
-            request.state.oauth_scopes = list(authorization.scopes)
-            return _finalize_auth(request, authorization.user, db)
         _mark_auth_type(request, "bearer")
         return _finalize_auth(request, _resolve_user_from_jwt(credentials.credentials, db), db)
 

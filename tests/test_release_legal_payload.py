@@ -49,7 +49,14 @@ def _git(repo: Path, *args: str) -> str:
 
 def test_packaging_configs_include_modification_record():
     pyproject = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    assert pyproject["project"]["name"] == "yiqiao"
     assert "MODIFICATIONS.md" in pyproject["project"]["license-files"]
+
+    release = pyproject["tool"]["yiqiao"]["release"]
+    assert release == {"publish": True, "channel": "pypi"}
+
+    server_requirements = (ROOT / "server" / "requirements.txt").read_text(encoding="utf-8").splitlines()
+    assert f"yiqiao>={pyproject['project']['version']}" in server_requirements
 
     build = pyproject["tool"]["hatch"]["build"]
     assert "yiqiao/**/*.py" in build["include"]
@@ -90,6 +97,18 @@ def test_versioned_image_publication_is_bound_to_the_release_tag():
     assert 'tag_ref="refs/tags/${RELEASE_VERSION}"' in workflow
     assert '"$tag_commit" != "$GITHUB_SHA"' in workflow
     assert "${{ inputs.version }}" in workflow
+
+
+def test_python_package_publication_uses_pypi_trusted_publishing():
+    workflow = (ROOT / ".github" / "workflows" / "images.yml").read_text(encoding="utf-8")
+
+    assert "publish-python-package:" in workflow
+    assert "environment:" in workflow
+    assert "name: pypi" in workflow
+    assert "id-token: write" in workflow
+    assert "python -m build" in workflow
+    assert "python -m twine check --strict dist/*" in workflow
+    assert "pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33" in workflow
 
 
 def test_git_name_status_includes_rename_and_copy_destinations():
