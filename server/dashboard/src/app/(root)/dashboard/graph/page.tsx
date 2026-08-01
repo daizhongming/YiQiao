@@ -14,7 +14,7 @@ import { api } from "@/utils/api";
 import { GRAPH_ENDPOINTS } from "@/utils/api-endpoints";
 import type { GraphEntity, GraphResponse } from "@/types/api";
 
-const GalaxyGraph = dynamic(() => import("./galaxy-graph"), {
+const PropertyGraph = dynamic(() => import("./galaxy-graph"), {
   ssr: false,
   loading: () => <GraphLoading />,
 });
@@ -22,8 +22,8 @@ const GalaxyGraph = dynamic(() => import("./galaxy-graph"), {
 function pageCopy(language: "en" | "zh") {
   if (language === "zh") {
     return {
-      title: "\u8bb0\u5fc6\u661f\u56fe",
-      project: "Neo4j \u5173\u7cfb\u7f51\u7edc",
+      title: "\u8bb0\u5fc6\u56fe\u8c31",
+      project: "Neo4j \u5c5e\u6027\u56fe",
       sync: "\u540c\u6b65 Neo4j",
       syncing: "\u540c\u6b65\u4e2d...",
       loadError: "\u56fe\u8c31\u4e0d\u53ef\u7528",
@@ -38,8 +38,8 @@ function pageCopy(language: "en" | "zh") {
     };
   }
   return {
-    title: "Memory Galaxy",
-    project: "Neo4j relationship network",
+    title: "Memory Graph",
+    project: "Neo4j property graph",
     sync: "Sync Neo4j",
     syncing: "Syncing...",
     loadError: "Graph is unavailable",
@@ -57,18 +57,18 @@ function pageCopy(language: "en" | "zh") {
 function GraphLoading() {
   return (
     <div
-      className="relative h-[calc(100dvh-190px)] min-h-[480px] max-h-[920px] overflow-hidden rounded-md bg-[#05070a] sm:h-[calc(100dvh-176px)] sm:min-h-[620px]"
+      className="relative h-[calc(100dvh-190px)] min-h-[480px] max-h-[920px] overflow-hidden rounded-md border border-memBorder-primary bg-[#f4f6f8] sm:h-[calc(100dvh-176px)] sm:min-h-[620px]"
       aria-busy="true"
     >
       <div className="absolute inset-0 animate-pulse opacity-70">
-        {Array.from({ length: 46 }).map((_, index) => {
-          const left = (index * 37) % 97;
-          const top = (index * 61) % 91;
-          const size = index % 9 === 0 ? 4 : 2;
+        {Array.from({ length: 20 }).map((_, index) => {
+          const left = 7 + ((index * 37) % 86);
+          const top = 12 + ((index * 61) % 74);
+          const size = index % 5 === 0 ? 32 : 22;
           return (
             <span
               key={index}
-              className="absolute rounded-full bg-white"
+              className="absolute rounded-full border-2 border-[#b8c1c9] bg-[#dfe4e8]"
               style={{
                 left: `${left}%`,
                 top: `${top}%`,
@@ -79,8 +79,8 @@ function GraphLoading() {
           );
         })}
       </div>
-      <div className="absolute left-3 top-3 h-10 w-72 max-w-[70%] border border-white/10 bg-white/[0.04]" />
-      <div className="absolute bottom-3 left-3 h-9 w-36 border border-white/10 bg-white/[0.04]" />
+      <div className="absolute left-3 top-3 h-10 w-72 max-w-[70%] border border-[#cbd1d6] bg-white/80" />
+      <div className="absolute bottom-3 left-3 h-9 w-80 max-w-[75%] border border-[#cbd1d6] bg-white/80" />
     </div>
   );
 }
@@ -224,7 +224,7 @@ export default function GraphPage() {
           danger={status?.reachable === false}
         />
       ) : (
-        <GalaxyGraph
+        <PropertyGraph
           nodes={nodes}
           edges={graph.edges ?? []}
           entities={entities}
