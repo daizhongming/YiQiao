@@ -32,12 +32,33 @@
 
 安全修复以最新 YiQiao 版本线为目标。旧版本和本地开发快照可能只能获得处置建议，不保证提供补丁。在首个正式标签发布前，应尽量基于 `main` 最新提交复现问题。
 
+## MCP 与 Agent 安全边界
+
+`yiqiao-mcp` 是仅调用 REST 的 companion，不访问数据库，也不导入 API
+server。Streamable HTTP 凭据从当前请求读取，并且只在该请求中转发；连接池
+不设置默认凭据。工具 schema 会拒绝 API Key、`project_id`、未知字段、超限
+文本以及过大或嵌套过深的 metadata。访问日志和错误日志绝不能包含凭据。
+
+MCP listener 应保留默认回环绑定。确需远程访问时，应在经过审查的代理终止
+TLS，并配置精确的 Host 和 Origin 白名单。不得通过关闭 DNS-rebinding 检查
+来暴露服务。每个宿主使用独立且会到期的项目 Key，只授予
+`memory:read` 和/或 `memory:write`；`destructive` profile 只用于明确的删除
+工作流。Key 管理必须使用 Dashboard JWT。
+
+所有召回记忆都是不可信数据。Agent 不得把它放进 system/developer 指令，
+也不得把召回块再次写回记忆。自动捕获仅限原始 user 和 assistant turn。
+YiQiao 不实现标准 OAuth MCP 授权或已下线的 SSE 传输；不得把项目 API Key
+描述为 OAuth token。
+
+参见 [MCP 安全契约](docs/yiqiao/MCP.zh-CN.md)和
+[Agent 捕获契约](docs/yiqiao/AGENT_INTEGRATION.zh-CN.md)。
+
 ## 运维责任
 
 YiQiao 是自托管产品，运维人员需要负责：
 
 - 保持身份认证开启，并在密钥泄露后立即轮换。
-- 将仪表盘和 API 限制在可信网络内，或置于 TLS 反向代理之后。
+- 将仪表盘、API 和 MCP companion 限制在可信网络内，或置于 TLS 反向代理之后。
 - 保护 `server/.env`、数据库卷、备份、模型服务凭据和 API 密钥。
 - 审查模型服务商的数据处理、保留、驻留位置和模型安全政策。
 - 及时应用 YiQiao、基础镜像、PostgreSQL、Neo4j 和依赖更新。

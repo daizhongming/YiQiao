@@ -16,9 +16,13 @@ YiQiao 衍生自上游 Mem0 工作的以下提交：
 
 请在完整的 Git 检出中运行 `python scripts/audit_modification_notices.py`，以验证本清单和每一条嵌入式声明。遇到未知的已修改文件格式时，审计将按封闭失败原则报错。
 
-已修改的上游文件：**216**
+已修改的上游文件：**227**
 
-路径列表 SHA-256：`25D0B7BAE1932CFFAACDC96F2AD7B085AFD101493FAACDF7D8DFEC11129B9D1C`
+路径列表 SHA-256：`3C72CB68E82D9A4C4DBA45E2BF182063651171744BA9AD60CF9A6149A133069F`
+
+YiQiao 原创文件：**185**
+
+原创路径列表 SHA-256：`0A72A6E9335B2E78BD0904F862CF9422CDAD46DB8CA50E2A20191B200CE743A8`
 
 ## 文件
 
@@ -117,6 +121,7 @@ YiQiao 衍生自上游 Mem0 工作的以下提交：
 - `server/auth.py` (源码注释)
 - `server/dashboard/.dockerignore` (源码注释)
 - `server/dashboard/.env.example` (源码注释)
+- `server/dashboard/.gitignore` (源码注释)
 - `server/dashboard/Dockerfile` (源码注释)
 - `server/dashboard/next.config.mjs` (源码注释)
 - `server/dashboard/package.json` (JSON 元数据)
@@ -157,8 +162,18 @@ YiQiao 衍生自上游 Mem0 工作的以下提交：
 - `server/dashboard/src/components/self-hosted/locked-page.tsx` (源码注释)
 - `server/dashboard/src/components/shared/data-table.tsx` (源码注释)
 - `server/dashboard/src/components/shared/table-skeleton.tsx` (源码注释)
+- `server/dashboard/src/components/ui/alert-dialog.tsx` (源码注释)
+- `server/dashboard/src/components/ui/button.tsx` (源码注释)
 - `server/dashboard/src/components/ui/calendar.tsx` (源码注释)
+- `server/dashboard/src/components/ui/card.tsx` (源码注释)
 - `server/dashboard/src/components/ui/dialog.tsx` (源码注释)
+- `server/dashboard/src/components/ui/select.tsx` (源码注释)
+- `server/dashboard/src/components/ui/sheet.tsx` (源码注释)
+- `server/dashboard/src/components/ui/sonner.tsx` (源码注释)
+- `server/dashboard/src/components/ui/table.tsx` (源码注释)
+- `server/dashboard/src/components/ui/textarea.tsx` (源码注释)
+- `server/dashboard/src/components/ui/toast.tsx` (源码注释)
+- `server/dashboard/src/constants/ui-components.ts` (源码注释)
 - `server/dashboard/src/lib/auth.tsx` (源码注释)
 - `server/dashboard/src/lib/error-message.ts` (源码注释)
 - `server/dashboard/src/lib/validators.ts` (源码注释)

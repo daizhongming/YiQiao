@@ -2,7 +2,7 @@
 
 **简体中文** | [English](DOCUMENTATION_COVERAGE.md)
 
-最后审查：2026-07-27
+最后审查：2026-08-05
 
 本清单是 YiQiao 面向公开用户的英文与简体中文文档的权威范围。英文原文仍是规范来源。
 只有同一提交上的 `make docs-check` 成功退出时，表中的 `pass` 校验值才有效。
@@ -30,6 +30,8 @@
 | `docs/yiqiao/README.md` | `docs/yiqiao/README.zh-CN.md` | `markdown` | `required` | `required` | `complete` | `pass` |
 | `docs/yiqiao/LEGAL.md` | `docs/yiqiao/LEGAL.zh-CN.md` | `markdown` | `required` | `required` | `complete` | `pass` |
 | `docs/yiqiao/MIGRATION.md` | `docs/yiqiao/MIGRATION.zh-CN.md` | `markdown` | `required` | `required` | `complete` | `pass` |
+| `docs/yiqiao/MCP.md` | `docs/yiqiao/MCP.zh-CN.md` | `markdown` | `required` | `required` | `complete` | `pass` |
+| `docs/yiqiao/AGENT_INTEGRATION.md` | `docs/yiqiao/AGENT_INTEGRATION.zh-CN.md` | `markdown` | `required` | `required` | `complete` | `pass` |
 | `docs/yiqiao/OPERATIONS.md` | `docs/yiqiao/OPERATIONS.zh-CN.md` | `markdown` | `required` | `required` | `complete` | `pass` |
 | `docs/yiqiao/RELEASE_0.2.0.md` | `docs/yiqiao/RELEASE_0.2.0.zh-CN.md` | `markdown` | `required` | `required` | `complete` | `pass` |
 | `docs/yiqiao/RELEASE_0.2.1.md` | `docs/yiqiao/RELEASE_0.2.1.zh-CN.md` | `markdown` | `required` | `required` | `complete` | `pass` |
@@ -53,6 +55,8 @@
 | `.github/ISSUE_TEMPLATE/config.yml` | GitHub 只支持一个保留的选择器配置；其中的可见文字已采用中英双语。 |
 | `server/dashboard/public/fonts/OFL-1.1.txt` | 未修改的第三方 SIL OFL 文本必须保持原文。 |
 | `server/dashboard/.env.example` | Dashboard 构建时模板；运维配置已记录在成对的服务端环境变量模板中。 |
+| `yiqiao-mcp/MODIFICATIONS.md` | 随伴随包发布的逐字法律载荷副本；仓库根目录的中英文版本是权威来源。 |
+| `yiqiao-mcp/THIRD_PARTY_NOTICES.md` | 随伴随包发布的逐字法律载荷副本；仓库根目录的中英文版本是权威来源。 |
 | `server/requirements.txt` | 供工具读取的依赖清单。 |
 | `server/dashboard/pnpm-lock.yaml` | 生成的依赖锁文件。 |
 | `.github/workflows/**` | CI 配置，不是用户文档。 |

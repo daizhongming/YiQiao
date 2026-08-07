@@ -38,11 +38,12 @@ service addresses are:
 | --- | --- | --- |
 | Dashboard | <http://localhost:3000> | `DASHBOARD_PORT` |
 | API | <http://localhost:8888> | `API_PORT` |
+| MCP | <http://localhost:8765/mcp> | `MCP_PORT` |
 | OpenAPI | <http://localhost:8888/docs> | follows `API_PORT` |
 | Health | <http://localhost:8888/api/health> | follows `API_PORT` |
 
-The default deployment pulls the configured release images. To build the API
-and dashboard from this checkout, run the following from the repository root in
+The default deployment pulls the configured release images. To build the API,
+dashboard, and MCP companion from this checkout, run from the repository root in
 Bash or PowerShell:
 
 ```text
@@ -55,8 +56,8 @@ for installation.
 
 ## Security and Persistence
 
-Authentication is enabled and telemetry is disabled by default. The API and
-dashboard bind to loopback, while PostgreSQL and Neo4j remain on the internal
+Authentication is enabled and telemetry is disabled by default. The API,
+dashboard, and MCP companion bind to loopback, while PostgreSQL and Neo4j remain on the internal
 backend network without host port mappings. Do not expose the services
 directly to the internet; use a trusted TLS reverse proxy or private network.
 
@@ -73,6 +74,8 @@ copy of migrated data.
 ## Documentation
 
 - [Operations, backup, upgrade, rollback, and removal](../docs/yiqiao/OPERATIONS.md)
+- [MCP companion](../docs/yiqiao/MCP.md)
+- [Agent integration](../docs/yiqiao/AGENT_INTEGRATION.md)
 - [Migration](../docs/yiqiao/MIGRATION.md)
 - [Troubleshooting](../docs/yiqiao/TROUBLESHOOTING.md)
 - [Security policy](../SECURITY.md)

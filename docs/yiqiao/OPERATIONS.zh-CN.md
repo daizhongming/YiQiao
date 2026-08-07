@@ -13,7 +13,7 @@
 - 备份和恢复流程需要 Bash。Windows 用户应在已启用容器引擎集成的 WSL 2 中运行
   这些维护章节。
 - 能够通过 HTTPS 访问容器镜像仓库和所有远程模型服务商。
-- 回环地址上的 `3000` 和 `8888` 端口可用，或已在 `server/.env` 中设置替代值。
+- 回环地址上的 `3000`、`8888` 和 `8765` 端口可用，或已在 `server/.env` 中设置替代值。
 - 存储空间足以容纳 PostgreSQL 向量、Neo4j 图数据、请求日志、导出结果和保留的
   导入文件。
 
@@ -100,11 +100,13 @@ docker compose down
 | `API_PORT` | `8888` | API 的主机端口 |
 | `DASHBOARD_BIND_ADDRESS` | `127.0.0.1` | 控制台的主机监听接口 |
 | `DASHBOARD_PORT` | `3000` | 控制台的主机端口 |
+| `MCP_BIND_ADDRESS` | `127.0.0.1` | MCP Streamable HTTP 的主机监听接口 |
+| `MCP_PORT` | `8765` | MCP 的主机端口 |
 | `PUBLIC_API_URL` | 根据 `API_PORT` 推导 | 反向代理后的浏览器可见 API URL |
 | `PUBLIC_DASHBOARD_URL` | 根据 `DASHBOARD_PORT` 推导 | 控制台公共来源与身份验证 URL |
 
-PostgreSQL 和 Neo4j 不映射主机端口，只连接内部后端网络。控制台和 API 默认监听
-回环地址。
+PostgreSQL 和 Neo4j 不映射主机端口，只连接内部后端网络。控制台、API 与 MCP
+companion 默认监听回环地址。
 
 远程访问应优先使用 TLS 反向代理或私有网络。将公共 URL 设置为外部可见的 HTTPS
 地址，将绑定地址限制在代理拓扑允许的最小范围内，然后重启应用容器。不要直接暴露
@@ -117,16 +119,17 @@ PostgreSQL 和 Neo4j 不映射主机端口，只连接内部后端网络。控�
 | --- | --- |
 | `YIQIAO_API_IMAGE` | `ghcr.io/daizhongming/yiqiao-api:latest` |
 | `YIQIAO_DASHBOARD_IMAGE` | `ghcr.io/daizhongming/yiqiao-dashboard:latest` |
+| `YIQIAO_MCP_IMAGE` | `ghcr.io/daizhongming/yiqiao-mcp:latest` |
 | `YIQIAO_PULL_POLICY` | `always` |
 
 为了让生产部署可复现，请将 `latest` 替换为已审查的标签或不可变摘要。升级前解析
-配置中的应用镜像引用，并记录两个仓库摘要：
+配置中的应用镜像引用，并记录三个仓库摘要：
 
 ```bash
 cd server
-set -- $(docker compose config --images yiqiao yiqiao-dashboard)
-if [ "$#" -ne 2 ]; then
-  echo "Expected two resolved application images" >&2
+set -- $(docker compose config --images yiqiao yiqiao-dashboard yiqiao-mcp)
+if [ "$#" -ne 3 ]; then
+  echo "Expected three resolved application images" >&2
   exit 1
 fi
 printf 'Resolved image: %s\n' "$@"
@@ -436,7 +439,8 @@ PowerShell 用户应从仓库根目录运行
 ## 回滚
 
 应用回滚与数据回滚是两个不同的决策。只有在先前应用与已迁移架构兼容时，才能将
-`YIQIAO_API_IMAGE` 和 `YIQIAO_DASHBOARD_IMAGE` 重新指向已记录的先前标签或摘要。
+`YIQIAO_API_IMAGE`、`YIQIAO_DASHBOARD_IMAGE` 和 `YIQIAO_MCP_IMAGE`
+重新指向已记录的先前标签或摘要。
 如果迁移不向后兼容，请创建替代部署，并恢复升级前的数据库和图备份。未经迁移审查，
 绝不要让旧版本程序连接唯一一份新迁移的数据。
 
@@ -448,6 +452,7 @@ docker compose ps
 docker compose logs --tail=200
 docker compose logs --tail=200 yiqiao
 curl --fail http://localhost:8888/api/health
+curl --fail http://localhost:8765/healthz
 ```
 
 请求日志可能包含提示词、标识符和元数据。请限制访问和保留时间，不要将原始日志粘贴
@@ -527,11 +532,32 @@ docker compose -p "$REMOVE_PROJECT" down -v
 只有在验证备份并解析出绝对路径后，才能删除 `server/history` 和 `server/.env`。
 Compose 不会删除这些文件。
 
+## MCP Companion 运维
+
+默认 stack 在 `127.0.0.1:8765` 启动 `yiqiao-mcp`，并通过内部 `backend`
+网络把 REST 流量发往 `http://yiqiao:8000`。服务不保存项目凭据。远程 client
+必须在每个 MCP 请求中发送 `X-API-Key`；权威审计记录应在 REST RequestLog
+中查看。
+
+容器健康端点为 `/healthz`，MCP 端点为 `/mcp`。`YIQIAO_MCP_PROFILE` 可取
+`read-only`、`memory` 或 `destructive`。`MCP_BIND_ADDRESS` 和 `MCP_PORT`
+只控制宿主机发布 socket。经过审查的反向代理值通过
+`YIQIAO_MCP_ALLOWED_HOSTS` 与 `YIQIAO_MCP_ALLOWED_ORIGINS` 配置。不得为了
+让某个 Origin 工作而关闭 DNS-rebinding 防护。`YIQIAO_MCP_CONNECT_TIMEOUT`
+和 `YIQIAO_MCP_REQUEST_TIMEOUT` 分别限制 REST 连接与请求时间。
+
+发生事件时，应先在 Dashboard 撤销受影响的项目 Key，再按 `api_key_id` 和
+`project_id` 检查 API RequestLog。重启 companion 不是凭据撤销手段，因为
+companion 不拥有凭据。REST `429`、`422` 或 `503` 会作为脱敏 MCP 工具错误
+保留。若反复发生超时或取消问题，应先检查 REST 健康端点和 provider 配置。
+
+完整传输与安全契约见 [MCP companion](MCP.zh-CN.md)。
+
 ## 安全检查清单
 
 - 保持 `AUTH_DISABLED=false`；生产覆盖配置会强制使用此值。
 - 除非数据路径和接收方已经获批，否则保持遥测关闭。
-- 保持 API 和控制台绑定到回环地址或私有接口。
+- 保持 API、控制台和 MCP 绑定到回环地址或私有接口。
 - 所有远程访问都必须先终止 TLS。
 - 怀疑发生泄露后，轮换 API 密钥、服务商密钥、数据库密码和 JWT 密钥。
 - 将数据库转储、图快照、history 文件和请求日志视为敏感用户数据。

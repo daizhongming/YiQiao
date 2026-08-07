@@ -5,6 +5,10 @@
 
 **English** | [简体中文](README.zh-CN.md)
 
+- [MCP companion](MCP.md): installation, stdio and Streamable HTTP,
+  tool profiles, credential forwarding, limits, and transport security.
+- [Agent integration](AGENT_INTEGRATION.md): entity semantics, untrusted recall,
+  safe capture, Hermes smoke, and the OpenClaw MCP contract.
 - [Operations](OPERATIONS.md): deployment modes, configuration, persistence,
   backup, upgrade, rollback, and removal.
 - [Migration](MIGRATION.md): moving an older self-hosted installation to the

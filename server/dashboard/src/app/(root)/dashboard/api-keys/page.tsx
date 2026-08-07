@@ -5,6 +5,8 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -27,6 +29,7 @@ import {
   FolderKey,
   Info,
   KeyRound,
+  ShieldCheck,
   Plus,
   Trash2,
 } from "lucide-react";
@@ -36,7 +39,9 @@ import { enUS, zhCN } from "date-fns/locale";
 import { getErrorMessage } from "@/lib/error-message";
 import { useI18n } from "@/lib/i18n";
 import { useApiQuery } from "@/hooks/use-api-query";
-import { ApiKey, ApiKeyCreateResponse } from "@/types/api";
+import { ApiKey, ApiKeyCreateResponse, ApiKeyScope } from "@/types/api";
+
+const DEFAULT_SCOPES: ApiKeyScope[] = ["memory:read", "memory:write"];
 
 export default function ApiKeysPage() {
   const { language, t } = useI18n();
@@ -44,6 +49,8 @@ export default function ApiKeysPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [newLabel, setNewLabel] = useState(() => t("YiQiao Default Key"));
   const [newKey, setNewKey] = useState("");
+  const [newScopes, setNewScopes] = useState<ApiKeyScope[]>(DEFAULT_SCOPES);
+  const [newExpiresAt, setNewExpiresAt] = useState("");
   const [copied, setCopied] = useState(false);
   const [creating, setCreating] = useState(false);
   const [keyToRevoke, setKeyToRevoke] = useState<ApiKey | null>(null);
@@ -65,6 +72,8 @@ export default function ApiKeysPage() {
     try {
       const res = await api.post<ApiKeyCreateResponse>(API_KEY_ENDPOINTS.BASE, {
         label: newLabel.trim(),
+        scopes: newScopes,
+        expires_at: newExpiresAt ? new Date(newExpiresAt).toISOString() : null,
       });
       setNewKey(res.data.key);
       void refetch();
@@ -77,6 +86,14 @@ export default function ApiKeysPage() {
     } finally {
       setCreating(false);
     }
+  };
+
+  const toggleScope = (scope: ApiKeyScope, checked: boolean) => {
+    setNewScopes((current) =>
+      checked
+        ? Array.from(new Set([...current, scope]))
+        : current.filter((item) => item !== scope),
+    );
   };
 
   const handleRevoke = async () => {
@@ -99,6 +116,8 @@ export default function ApiKeysPage() {
     if (!open) {
       setNewKey("");
       setNewLabel(t("YiQiao Default Key"));
+      setNewScopes(DEFAULT_SCOPES);
+      setNewExpiresAt("");
       setCopied(false);
     }
     setCreateOpen(open);
@@ -109,13 +128,13 @@ export default function ApiKeysPage() {
       key: "label" as keyof ApiKey,
       label: "Key Name",
       icon: FolderKey,
-      width: 220,
+      width: 180,
     },
     {
       key: "key_prefix" as keyof ApiKey,
       label: "API Key",
       icon: KeyRound,
-      width: 420,
+      width: 280,
       render: (value: string) => (
         <code className="block truncate text-xs font-mono">
           {value}
@@ -124,10 +143,44 @@ export default function ApiKeysPage() {
       ),
     },
     {
+      key: "scopes" as keyof ApiKey,
+      label: "Permissions",
+      icon: ShieldCheck,
+      width: 220,
+      render: (_: ApiKey[keyof ApiKey], row: ApiKey) => {
+        const effectiveScopes = row.scopes ?? DEFAULT_SCOPES;
+        return (
+          <div className="flex flex-wrap gap-1">
+            {effectiveScopes.map((scope) => (
+              <Badge key={scope} variant="outline" className="font-mono">
+                {scope}
+              </Badge>
+            ))}
+            {row.scopes === null && <Badge variant="secondary">Legacy</Badge>}
+            {effectiveScopes.length === 0 && (
+              <span className="text-xs text-onSurface-default-secondary">
+                None
+              </span>
+            )}
+          </div>
+        );
+      },
+    },
+    {
+      key: "expires_at" as keyof ApiKey,
+      label: "Expires At",
+      icon: CalendarDays,
+      width: 190,
+      render: (value: ApiKey[keyof ApiKey]) =>
+        typeof value === "string"
+          ? format(new Date(value), "PPp", { locale: dateLocale })
+          : "Never",
+    },
+    {
       key: "created_at" as keyof ApiKey,
       label: "Created At",
       icon: CalendarDays,
-      width: 220,
+      width: 190,
       render: (value: string) =>
         format(
           new Date(value),
@@ -140,7 +193,7 @@ export default function ApiKeysPage() {
     {
       key: "id" as keyof ApiKey,
       label: "",
-      width: 72,
+      width: 56,
       render: (_: string, row: ApiKey) => (
         <div className="flex items-center justify-end gap-1">
           <Button
@@ -194,6 +247,36 @@ export default function ApiKeysPage() {
                     onChange={(e) => setNewLabel(e.target.value)}
                     placeholder={t("YiQiao Default Key")}
                     autoFocus
+                  />
+                </div>
+                <fieldset className="space-y-2">
+                  <legend className="text-sm font-medium">Permissions</legend>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {DEFAULT_SCOPES.map((scope) => (
+                      <Label
+                        key={scope}
+                        htmlFor={`api-key-scope-${scope}`}
+                        className="flex min-h-10 cursor-pointer items-center gap-2 rounded-md border border-memBorder-primary px-3 py-2 font-normal"
+                      >
+                        <Checkbox
+                          id={`api-key-scope-${scope}`}
+                          checked={newScopes.includes(scope)}
+                          onCheckedChange={(checked) =>
+                            toggleScope(scope, checked === true)
+                          }
+                        />
+                        <span className="font-mono text-xs">{scope}</span>
+                      </Label>
+                    ))}
+                  </div>
+                </fieldset>
+                <div className="space-y-2">
+                  <Label htmlFor="api-key-expiration">Expires At</Label>
+                  <Input
+                    id="api-key-expiration"
+                    type="datetime-local"
+                    value={newExpiresAt}
+                    onChange={(event) => setNewExpiresAt(event.target.value)}
                   />
                 </div>
                 <Button

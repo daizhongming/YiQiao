@@ -65,12 +65,16 @@ NOTICE.zh-CN.md
 README.zh-CN.md
 SECURITY.zh-CN.md
 THIRD_PARTY_NOTICES.zh-CN.md
+docs/yiqiao/AGENT_INTEGRATION.md
+docs/yiqiao/AGENT_INTEGRATION.zh-CN.md
 docs/yiqiao/DOCUMENTATION_COVERAGE.md
 docs/yiqiao/DOCUMENTATION_COVERAGE.zh-CN.md
 docs/yiqiao/LEGAL.md
 docs/yiqiao/LEGAL.zh-CN.md
 docs/yiqiao/MIGRATION.md
 docs/yiqiao/MIGRATION.zh-CN.md
+docs/yiqiao/MCP.md
+docs/yiqiao/MCP.zh-CN.md
 docs/yiqiao/OPERATIONS.md
 docs/yiqiao/OPERATIONS.zh-CN.md
 docs/yiqiao/RELEASE_0.2.0.md
@@ -98,6 +102,7 @@ scripts/full_stack_smoke.py
 scripts/import_chat_history.py
 scripts/init.ps1
 scripts/init.sh
+scripts/mcp_contract_smoke.py
 scripts/verify_chat_import_consistency.py
 server/alembic/versions/007_create_webhooks.py
 server/alembic/versions/008_add_webhook_name.py
@@ -170,6 +175,7 @@ server/workspace.py
 tests/conftest.py
 tests/e2e/openai_stub.py
 tests/memory/test_operation_context.py
+tests/test_api_key_authorization.py
 tests/test_auth_account_routes.py
 tests/test_chat_import.py
 tests/test_chat_import_artifact_compare.py
@@ -179,11 +185,13 @@ tests/test_dashboard_mock_api.py
 tests/test_docs_localization.py
 tests/test_environment_isolation.py
 tests/test_exports_router.py
+tests/test_full_stack_smoke_mcp.py
 tests/test_import_chat_history.py
 tests/test_import_quota.py
 tests/test_import_repository.py
 tests/test_memories_router.py
 tests/test_memory_imports_api.py
+tests/test_mcp_contract_smoke.py
 tests/test_neo4j_graph_memory.py
 tests/test_playground_routes.py
 tests/test_public_api.py
@@ -201,6 +209,26 @@ tests/test_webhooks_router.py
 tests/test_workspace_rbac.py
 tests/vector_stores/test_pgvector_import_queries.py
 THIRD_PARTY_NOTICES.md
+yiqiao-mcp/Dockerfile
+yiqiao-mcp/LICENSE
+yiqiao-mcp/MODIFICATIONS.md
+yiqiao-mcp/NOTICE
+yiqiao-mcp/THIRD_PARTY_NOTICES.md
+yiqiao-mcp/pyproject.toml
+yiqiao-mcp/src/yiqiao_mcp/__init__.py
+yiqiao-mcp/src/yiqiao_mcp/__main__.py
+yiqiao-mcp/src/yiqiao_mcp/cli.py
+yiqiao-mcp/src/yiqiao_mcp/config.py
+yiqiao-mcp/src/yiqiao_mcp/errors.py
+yiqiao-mcp/src/yiqiao_mcp/rest.py
+yiqiao-mcp/src/yiqiao_mcp/server.py
+yiqiao-mcp/src/yiqiao_mcp/tools.py
+yiqiao-mcp/src/yiqiao_mcp/transports.py
+yiqiao-mcp/tests/test_cli_config.py
+yiqiao-mcp/tests/test_http_transport.py
+yiqiao-mcp/tests/test_legal_payload.py
+yiqiao-mcp/tests/test_stdio_transport.py
+yiqiao-mcp/tests/test_tools_and_rest.py
 yiqiao/__init__.py
 """.strip().splitlines()
 )
@@ -329,10 +357,11 @@ def modified_paths(root: Path, *, fetch_base: bool = False) -> list[Path]:
     assert isinstance(added_raw, bytes)
     assert isinstance(untracked_raw, bytes)
 
-    records = _parse_name_status(changed_raw)
-    renamed_or_copied = {path for status, path in records if status in {"R", "C"}}
-    originated = (_nul_paths(added_raw) | _nul_paths(untracked_raw)) - renamed_or_copied
     expected_originated = {Path(path) for path in YIQIAO_ORIGINATED_PATHS}
+    records = _parse_name_status(changed_raw)
+    reviewed_additions = {path for status, path in records if status in {"R", "C"} and path in expected_originated}
+    renamed_or_copied = {path for status, path in records if status in {"R", "C"} and path not in reviewed_additions}
+    originated = (_nul_paths(added_raw) | _nul_paths(untracked_raw)) - renamed_or_copied
     unreviewed = sorted(originated - expected_originated, key=lambda path: path.as_posix())
     stale = sorted(expected_originated - originated, key=lambda path: path.as_posix())
     if unreviewed or stale:
@@ -340,7 +369,7 @@ def modified_paths(root: Path, *, fetch_base: bool = False) -> list[Path]:
         details.extend(f"stale originated-path allowlist entry: {path.as_posix()}" for path in stale)
         raise AuditError("YiQiao-originated path inventory mismatch; " + "; ".join(details))
 
-    return sorted({path for _, path in records}, key=lambda path: path.as_posix())
+    return sorted({path for _, path in records if path not in reviewed_additions}, key=lambda path: path.as_posix())
 
 
 def notice_kind(path: Path) -> str:

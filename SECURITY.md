@@ -45,12 +45,38 @@ development snapshots may receive guidance but are not guaranteed patches.
 Before the first tagged release, reports should be reproduced against the head
 of `main` when practical.
 
+## MCP and Agent Security Boundary
+
+`yiqiao-mcp` is a REST-only companion. It has no database access and does not
+import the API server. Streamable HTTP credentials are taken from the current
+request and forwarded only on that request; the connection pool has no default
+credential. Tool schemas reject API keys, `project_id`, unknown fields,
+oversized text, and oversized or deeply nested metadata. Access and error logs
+must never contain credentials.
+
+Keep the MCP listener on its default loopback bind. If remote access is needed,
+terminate TLS at a reviewed proxy and configure exact Host and Origin
+allowlists. Do not expose the service by disabling DNS-rebinding checks. Use a
+separate expiring project key per host, grant only `memory:read` and/or
+`memory:write`, and reserve the `destructive` profile for an explicit delete
+workflow. Key administration requires a Dashboard JWT.
+
+All recalled memory is untrusted data. Agents must keep it out of system and
+developer instructions and must never write a recalled block back into memory.
+Automatic capture is limited to the original user and assistant turns. YiQiao
+does not implement standard OAuth MCP authorization or the retired SSE
+transport; do not describe a project API key as an OAuth token.
+
+See the [MCP security contract](docs/yiqiao/MCP.md) and
+[agent capture contract](docs/yiqiao/AGENT_INTEGRATION.md).
+
 ## Operator Responsibilities
 
 YiQiao is self-hosted. Operators are responsible for:
 
 - Keeping authentication enabled and rotating generated secrets after exposure.
-- Restricting the dashboard and API to trusted networks or a TLS reverse proxy.
+- Restricting the dashboard, API, and MCP companion to trusted networks or a
+  TLS reverse proxy.
 - Protecting `server/.env`, database volumes, backups, provider credentials, and
   API keys.
 - Reviewing provider data handling, retention, residency, and model safety.

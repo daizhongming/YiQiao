@@ -13,7 +13,7 @@ commands from the repository root unless a section says otherwise.
 - Bash for the Backup and Restore procedures. On Windows, run those
   maintenance sections from WSL 2 with container-engine integration enabled.
 - Outbound HTTPS for the container registry and any remote model provider.
-- Available loopback ports `3000` and `8888`, or alternate values in
+- Available loopback ports `3000`, `8888`, and `8765`, or alternate values in
   `server/.env`.
 - Storage sized for PostgreSQL vectors, Neo4j graph data, request logs, exports,
   and retained import files.
@@ -102,11 +102,14 @@ docker compose down
 | `API_PORT`               | `8888`                        | Host API port                          |
 | `DASHBOARD_BIND_ADDRESS` | `127.0.0.1`                   | Host interface for the dashboard       |
 | `DASHBOARD_PORT`         | `3000`                        | Host dashboard port                    |
+| `MCP_BIND_ADDRESS`       | `127.0.0.1`                   | Host interface for MCP Streamable HTTP |
+| `MCP_PORT`               | `8765`                        | Host MCP port                          |
 | `PUBLIC_API_URL`         | derived from `API_PORT`       | Browser-visible API URL behind a proxy |
 | `PUBLIC_DASHBOARD_URL`   | derived from `DASHBOARD_PORT` | Public dashboard origin and auth URL   |
 
 PostgreSQL and Neo4j have no host port mapping. They are attached only to the
-internal backend network. The dashboard and API listen on loopback by default.
+internal backend network. The dashboard, API, and MCP companion listen on
+loopback by default.
 
 For remote access, prefer a TLS reverse proxy or private network. Set the public
 URLs to their externally visible HTTPS values, keep the bind addresses as narrow
@@ -120,17 +123,18 @@ expose database services directly.
 | ------------------------ | ---------------------------------------------- |
 | `YIQIAO_API_IMAGE`       | `ghcr.io/daizhongming/yiqiao-api:latest`       |
 | `YIQIAO_DASHBOARD_IMAGE` | `ghcr.io/daizhongming/yiqiao-dashboard:latest` |
+| `YIQIAO_MCP_IMAGE`       | `ghcr.io/daizhongming/yiqiao-mcp:latest`       |
 | `YIQIAO_PULL_POLICY`     | `always`                                       |
 
 For reproducible production deployments, replace `latest` with a reviewed tag or
 immutable digest. Resolve the configured application image references and record
-both registry digests before an upgrade:
+all three registry digests before an upgrade:
 
 ```bash
 cd server
-set -- $(docker compose config --images yiqiao yiqiao-dashboard)
-if [ "$#" -ne 2 ]; then
-  echo "Expected two resolved application images" >&2
+set -- $(docker compose config --images yiqiao yiqiao-dashboard yiqiao-mcp)
+if [ "$#" -ne 3 ]; then
+  echo "Expected three resolved application images" >&2
   exit 1
 fi
 printf 'Resolved image: %s\n' "$@"
@@ -469,8 +473,9 @@ starts. Do not interrupt the first startup during migration.
 ## Rollback
 
 Application rollback and data rollback are separate decisions. Re-point
-`YIQIAO_API_IMAGE` and `YIQIAO_DASHBOARD_IMAGE` to the recorded prior tags or
-digests only when the prior application is compatible with the migrated schema.
+`YIQIAO_API_IMAGE`, `YIQIAO_DASHBOARD_IMAGE`, and `YIQIAO_MCP_IMAGE` to the
+recorded prior tags or digests only when the prior application is compatible
+with the migrated schema.
 If a migration is not backward compatible, create a replacement deployment and
 restore the pre-upgrade database and graph backups. Never attach an older binary
 to the only copy of newly migrated data without reviewing the migration.
@@ -483,6 +488,7 @@ docker compose ps
 docker compose logs --tail=200
 docker compose logs --tail=200 yiqiao
 curl --fail http://localhost:8888/api/health
+curl --fail http://localhost:8765/healthz
 ```
 
 Request logs may contain prompts, identifiers, and metadata. Limit access and
@@ -565,11 +571,35 @@ docker compose -p "$REMOVE_PROJECT" down -v
 Then remove `server/history` and `server/.env` only after verifying the backup
 and resolving the absolute paths. These files are not removed by Compose.
 
+## MCP Companion Operations
+
+The default stack starts `yiqiao-mcp` on `127.0.0.1:8765` and routes its REST
+traffic to `http://yiqiao:8000` on the internal `backend` network. The service
+stores no project credential. Remote clients send `X-API-Key` on every MCP
+request; inspect REST RequestLog for the authoritative audit record.
+
+The container health endpoint is `/healthz`; the MCP endpoint is `/mcp`.
+`YIQIAO_MCP_PROFILE` accepts `read-only`, `memory`, or `destructive`.
+`MCP_BIND_ADDRESS` and `MCP_PORT` control only the published host socket. Use
+`YIQIAO_MCP_ALLOWED_HOSTS` and `YIQIAO_MCP_ALLOWED_ORIGINS` for reviewed reverse
+proxy values. `YIQIAO_MCP_CONNECT_TIMEOUT` and `YIQIAO_MCP_REQUEST_TIMEOUT`
+bound REST connection and request time. Never disable DNS-rebinding protection
+to make an Origin work.
+
+During an incident, revoke the affected project key in the Dashboard first,
+then inspect the API RequestLog by `api_key_id` and `project_id`. Restarting the
+companion is not a credential revocation mechanism because the companion does
+not own credentials. A REST `429`, `422`, or `503` remains visible as a
+sanitized MCP tool error. Repeated timeout or cancellation failures should be
+diagnosed first against the REST health endpoint and provider configuration.
+
+See [MCP companion](MCP.md) for the complete transport and security contract.
+
 ## Security Checklist
 
 - Keep `AUTH_DISABLED=false`; the production overlay forces this value.
 - Leave telemetry disabled unless the data path and recipient are approved.
-- Keep API and dashboard binds on loopback or a private interface.
+- Keep API, dashboard, and MCP binds on loopback or a private interface.
 - Terminate TLS before any remote access.
 - Rotate API keys, provider keys, database passwords, and JWT secrets after suspected exposure.
 - Treat database dumps, graph snapshots, history files, and request logs as

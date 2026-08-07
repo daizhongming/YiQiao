@@ -59,15 +59,23 @@ def test_api_key_contract_supports_dashboard_list_create_and_revoke():
         assert status == 200
         assert isinstance(keys, list)
         assert keys[0]["key_prefix"] == "yqk_preview_"
+        assert keys[0]["scopes"] is None
+        assert keys[0]["expires_at"] is None
         assert "key" not in keys[0]
 
         status, created = _json_request(
             f"{base_url}/api-keys",
             method="POST",
-            payload={"label": "Browser matrix key"},
+            payload={
+                "label": "Browser matrix key",
+                "scopes": ["memory:read"],
+                "expires_at": "2026-08-22T12:00:00Z",
+            },
         )
         assert status == 201
         assert created["label"] == "Browser matrix key"
+        assert created["scopes"] == ["memory:read"]
+        assert created["expires_at"] == "2026-08-22T12:00:00Z"
         assert created["key"] == "one-time-dashboard-preview-key"
 
         status, revoked = _json_request(f"{base_url}/api-keys/{created['id']}", method="DELETE")

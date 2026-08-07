@@ -4,7 +4,7 @@
 
 # 第三方声明
 
-YiQiao 使用第三方开源软件。本清单涵盖截至 2026-07-18 审查的直接运行时依赖、Dashboard 的直接构建依赖，以及具有实质性再分发要求的容器镜像。对于特定构建，`pyproject.toml`、`server/requirements.txt`、`server/dashboard/package.json` 和 `server/dashboard/pnpm-lock.yaml` 中的版本约束及解析后的版本具有权威性。
+YiQiao 使用第三方开源软件。本清单涵盖截至 2026-08-05 审查的直接运行时依赖、Dashboard 的直接构建依赖，以及具有实质性再分发要求的容器镜像。对于特定构建，`pyproject.toml`、`server/requirements.txt`、`yiqiao-mcp/pyproject.toml`、`server/dashboard/package.json` 和 `server/dashboard/pnpm-lock.yaml` 中的版本约束及解析后的版本具有权威性。
 
 YiQiao 的 Apache License 2.0 不取代任何依赖项自身的许可证。依赖项随附的著作权声明和许可证文件必须保留在二进制发行版中。本文件仅供参考，不构成法律意见。
 
@@ -42,6 +42,22 @@ YiQiao 包含来自 Mem0 开源项目（<https://github.com/mem0ai/mem0>）的�
 
 可选的 Python 提供方和向量存储扩展不会安装在默认 API 镜像中，除非在自定义构建中选择它们。在分发此类自定义镜像之前，必须审查这些扩展的许可证。
 
+## MCP Companion 运行时
+
+独立的 `yiqiao-mcp` 发行包声明了以下直接运行时依赖。为保证 companion 单独分发时的清单完整，此处也重复列出 API 已使用的依赖。
+
+| 依赖项       | 许可证       | 项目源地址                                                 |
+| ------------ | ------------ | ---------------------------------------------------------- |
+| `anyio`      | MIT          | <https://github.com/agronholm/anyio>                       |
+| `httpx`      | BSD-3-Clause | <https://github.com/encode/httpx>                          |
+| `jsonschema` | MIT          | <https://github.com/python-jsonschema/jsonschema>          |
+| `mcp`        | MIT          | <https://github.com/modelcontextprotocol/python-sdk>       |
+| `pydantic`   | MIT          | <https://github.com/pydantic/pydantic>                     |
+| `starlette`  | BSD-3-Clause | <https://github.com/Kludex/starlette>                      |
+| `uvicorn`    | BSD-3-Clause | <https://github.com/encode/uvicorn>                        |
+
+companion 使用 `hatchling`（MIT）构建发行包，可选测试依赖为 `pytest`（MIT）和 `pytest-asyncio`（Apache-2.0）。这些构建和测试软件包不会安装到运行时容器中。
+
 ## Dashboard 运行时
 
 以下直接运行时软件包采用 MIT 许可证：
@@ -73,7 +89,7 @@ Dashboard 捆绑了从上游 Mem0 导入且未经修改的 Inter 4.001、Fustat 
 
 | 镜像系列                 | 实质性许可证                                                                               | 分发说明                                                                                                                                                                                                                          |
 | ------------------------ | ------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `python:3.12-slim`       | Python Software Foundation License；Debian 软件包适用其各自的许可证                        | 构成 YiQiao API 镜像的基础。再分发时必须保留 `/usr/share/doc` 著作权数据和上游镜像声明。                                                                                                                                            |
+| `python:3.12-slim`       | Python Software Foundation License；Debian 软件包适用其各自的许可证                        | 构成 YiQiao API 与 MCP companion 镜像的基础。再分发时必须保留 `/usr/share/doc` 著作权数据和上游镜像声明。                                                                                                                          |
 | `node:20-alpine`         | Node.js MIT；Alpine 软件包适用其各自的许可证                                               | 构成 YiQiao Dashboard 镜像的基础。再分发时必须保留软件包著作权及许可证元数据。                                                                                                                                                      |
 | `pgvector/pgvector:pg17` | PostgreSQL 和 pgvector 均适用 PostgreSQL License                                           | 作为独立服务拉取。如进行镜像或重新打包，必须保留 PostgreSQL 和 pgvector 的声明。                                                                                                                                                    |
 | `neo4j:5-community`      | Neo4j Community Edition 适用 GNU General Public License v3，另含捆绑组件各自的许可证       | 作为独立服务拉取，YiQiao 不会对其重新许可。对其进行镜像或重新打包的分发者必须履行 GPLv3 的对应源代码提供义务和声明义务。不包含仅限 Enterprise 的功能和许可证。                                                                       |

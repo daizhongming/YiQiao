@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from urllib.parse import urlparse
 
-from auth import require_project_write, verify_auth
+from auth import enforce_api_key_scope, require_project_write, verify_auth
 from db import get_db
 from fastapi import APIRouter, Depends, HTTPException, Request
 from models import User, Webhook
@@ -92,6 +92,7 @@ def _ensure_project_write(request: Request, project_id: str, user: User | None, 
         request.state.project_id = project_id
         return
     if auth_type == "api_key":
+        enforce_api_key_scope(request, write=True)
         if current_project_id == project_id:
             request.state.project_id = project_id
             return
@@ -243,7 +244,8 @@ def platform_update_webhook(
     db: Session = Depends(get_db),
 ):
     hook = db.get(Webhook, hook_id)
-    if hook is None:
+    auth_type = getattr(request.state, "auth_type", "none")
+    if hook is None or (auth_type == "api_key" and hook.project_id != get_project_id(request)):
         raise HTTPException(status_code=404, detail="Webhook not found.")
     _ensure_project_write(request, hook.project_id, user, db)
     payload = WebhookUpdate(
@@ -263,7 +265,8 @@ def platform_delete_webhook(
     db: Session = Depends(get_db),
 ):
     hook = db.get(Webhook, hook_id)
-    if hook is None:
+    auth_type = getattr(request.state, "auth_type", "none")
+    if hook is None or (auth_type == "api_key" and hook.project_id != get_project_id(request)):
         raise HTTPException(status_code=404, detail="Webhook not found.")
     _ensure_project_write(request, hook.project_id, user, db)
     return delete_webhook(hook_id, request, user, db)

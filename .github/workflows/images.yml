@@ -46,6 +46,10 @@ jobs:
             context: .
             file: server/dashboard/Dockerfile
             tag: yiqiao-dashboard:ci
+          - name: MCP companion
+            context: .
+            file: yiqiao-mcp/Dockerfile
+            tag: yiqiao-mcp:ci
     steps:
       - name: Check out source
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -105,12 +109,16 @@ jobs:
           expected_version = release_version[1:]
           with open("pyproject.toml", "rb") as pyproject_file:
               pyproject_version = tomllib.load(pyproject_file)["project"]["version"]
+          with open("yiqiao-mcp/pyproject.toml", "rb") as mcp_pyproject_file:
+              mcp_version = tomllib.load(mcp_pyproject_file)["project"]["version"]
           with open("server/dashboard/package.json", encoding="utf-8") as package_file:
               dashboard_version = json.load(package_file)["version"]
 
           mismatches = []
           if pyproject_version != expected_version:
               mismatches.append(f"pyproject.toml has {pyproject_version!r}")
+          if mcp_version != expected_version:
+              mismatches.append(f"yiqiao-mcp/pyproject.toml has {mcp_version!r}")
           if dashboard_version != expected_version:
               mismatches.append(f"server/dashboard/package.json has {dashboard_version!r}")
           if mismatches:
@@ -160,6 +168,10 @@ jobs:
             context: .
             file: server/dashboard/Dockerfile
             image: yiqiao-dashboard
+          - name: MCP companion
+            context: .
+            file: yiqiao-mcp/Dockerfile
+            image: yiqiao-mcp
     steps:
       - name: Check out source
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3

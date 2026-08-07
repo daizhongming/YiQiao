@@ -35,10 +35,11 @@ docker compose up -d
 | --- | --- | --- |
 | 控制台 | <http://localhost:3000> | `DASHBOARD_PORT` |
 | API | <http://localhost:8888> | `API_PORT` |
+| MCP | <http://localhost:8765/mcp> | `MCP_PORT` |
 | OpenAPI | <http://localhost:8888/docs> | 跟随 `API_PORT` |
 | 健康检查 | <http://localhost:8888/api/health> | 跟随 `API_PORT` |
 
-默认部署会拉取配置的正式发布镜像。如需从当前源码构建 API 和控制台，请在仓库根目录
+默认部署会拉取配置的正式发布镜像。如需从当前源码构建 API、控制台和 MCP companion，请在仓库根目录
 通过 Bash 或 PowerShell 运行：
 
 ```text
@@ -50,7 +51,7 @@ docker compose -f docker-compose.yaml -f docker-compose.build.yaml up -d --build
 
 ## 安全与持久化
 
-身份验证默认开启，遥测默认关闭。API 和控制台绑定到回环地址，PostgreSQL 与 Neo4j
+身份验证默认开启，遥测默认关闭。API、控制台和 MCP companion 绑定到回环地址，PostgreSQL 与 Neo4j
 只连接内部后端网络，不映射主机端口。不要将这些服务直接暴露到互联网；请使用可信的
 TLS 反向代理或私有网络。
 
@@ -65,6 +66,8 @@ TLS 反向代理或私有网络。
 ## 文档
 
 - [运维、备份、升级、回滚和卸载](../docs/yiqiao/OPERATIONS.zh-CN.md)
+- [MCP companion](../docs/yiqiao/MCP.zh-CN.md)
+- [Agent 集成](../docs/yiqiao/AGENT_INTEGRATION.zh-CN.md)
 - [迁移指南](../docs/yiqiao/MIGRATION.zh-CN.md)
 - [故障排查](../docs/yiqiao/TROUBLESHOOTING.zh-CN.md)
 - [安全策略](../SECURITY.zh-CN.md)

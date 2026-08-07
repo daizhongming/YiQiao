@@ -17,3 +17,11 @@ services:
       dockerfile: server/dashboard/Dockerfile
       args:
         NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmjs.org}
+
+  yiqiao-mcp:
+    pull_policy: build
+    build:
+      context: ..
+      dockerfile: yiqiao-mcp/Dockerfile
+      args:
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.org/simple}

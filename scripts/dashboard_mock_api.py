@@ -196,6 +196,8 @@ class MockState:
                 "label": "Dashboard acceptance key",
                 "key_prefix": "yqk_preview_",
                 "project_id": "default-project",
+                "scopes": None,
+                "expires_at": None,
                 "created_at": "2026-07-18T08:00:00Z",
                 "last_used_at": "2026-07-22T11:48:00Z",
             }
@@ -500,6 +502,8 @@ class DashboardMockHandler(BaseHTTPRequestHandler):
                     "label": str(body.get("label") or "Dashboard acceptance key"),
                     "key_prefix": "yqk_preview_",
                     "project_id": "default-project",
+                    "scopes": deepcopy(body.get("scopes", ["memory:read", "memory:write"])),
+                    "expires_at": body.get("expires_at"),
                     "created_at": NOW,
                     "last_used_at": None,
                 }

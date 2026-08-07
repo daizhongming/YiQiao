@@ -44,6 +44,7 @@ and strong local secrets without overwriting an existing file.
 | --- | --- | --- |
 | Dashboard | <http://localhost:3000> | `DASHBOARD_PORT` |
 | REST API | <http://localhost:8888> | `API_PORT` |
+| MCP Streamable HTTP | <http://localhost:8765/mcp> | `MCP_PORT` |
 | OpenAPI | <http://localhost:8888/docs> | follows `API_PORT` |
 | Health | <http://localhost:8888/api/health> | follows `API_PORT` |
 
@@ -165,11 +166,13 @@ needs to own the storage and model-provider relationship.
 ## Architecture
 
 ```text
-Browser / API clients
+Browser / API / MCP clients
         |
         +--> Dashboard :3000
         |         |
-        +---------+--> YiQiao API :8888 --> selected model providers
+        +--> MCP companion :8765 --REST--+
+        |                              |
+        +---------+--------------------+--> YiQiao API :8888 --> selected model providers
                              |  \
                              |   +--> Neo4j Community (graph)
                              +------> PostgreSQL + pgvector (auth, settings,
@@ -199,12 +202,16 @@ and secrets out of version control. Do not expose the API or dashboard directly
 to the internet; terminate TLS at a trusted reverse proxy and restrict access to
 the intended network.
 
-See [Operations](docs/yiqiao/OPERATIONS.md) for ports, persistence, backup,
-upgrade, source builds, and removal.
+See [MCP companion](docs/yiqiao/MCP.md) and
+[Agent integration](docs/yiqiao/AGENT_INTEGRATION.md) for stdio/Streamable
+HTTP and safe capture. See [Operations](docs/yiqiao/OPERATIONS.md) for ports,
+persistence, backup, upgrade, source builds, and removal.
 
 ## Documentation
 
 - [Operations](docs/yiqiao/OPERATIONS.md)
+- [MCP companion](docs/yiqiao/MCP.md)
+- [Agent integration](docs/yiqiao/AGENT_INTEGRATION.md)
 - [Migration](docs/yiqiao/MIGRATION.md)
 - [Troubleshooting](docs/yiqiao/TROUBLESHOOTING.md)
 - [Licensing and provenance](docs/yiqiao/LEGAL.md)

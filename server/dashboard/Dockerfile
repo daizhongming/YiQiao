@@ -13,7 +13,16 @@ WORKDIR /app
 # Dependencies
 FROM base AS deps
 COPY server/dashboard/package.json server/dashboard/pnpm-lock.yaml server/dashboard/pnpm-workspace.yaml ./
-RUN pnpm install --frozen-lockfile
+ARG NPM_PROXY
+ARG PNPM_NETWORK_CONCURRENCY=16
+RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
+    npm_config_proxy="${NPM_PROXY}" \
+    npm_config_https_proxy="${NPM_PROXY}" \
+    pnpm install --frozen-lockfile \
+      --network-concurrency="${PNPM_NETWORK_CONCURRENCY}" \
+      --fetch-retries=5 \
+      --fetch-retry-mintimeout=2000 \
+      --fetch-retry-maxtimeout=30000
 RUN set -eu; \
     mkdir -p /licenses/npm/packages; \
     find node_modules/.pnpm -type f \

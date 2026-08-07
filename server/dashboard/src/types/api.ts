@@ -15,11 +15,15 @@ export interface Memory {
   updated_at?: string;
 }
 
+export type ApiKeyScope = "memory:read" | "memory:write";
+
 export interface ApiKey {
   id: string;
   label: string;
   key_prefix: string;
   project_id?: string;
+  scopes: ApiKeyScope[] | null;
+  expires_at: string | null;
   created_at: string;
   last_used_at: string | null;
 }
@@ -30,6 +34,8 @@ export interface ApiKeyCreateResponse {
   key: string;
   key_prefix: string;
   project_id?: string;
+  scopes: ApiKeyScope[];
+  expires_at: string | null;
   created_at: string;
 }
 

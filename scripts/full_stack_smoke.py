@@ -4,14 +4,20 @@
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
 import json
+import math
 import os
+import re
 import secrets
 import subprocess
 import sys
 import time
 import urllib.error
 import urllib.request
+from collections.abc import Callable, Iterable, Mapping
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -21,6 +27,7 @@ BASE_COMPOSE = SERVER / "docker-compose.yaml"
 BUILD_COMPOSE = SERVER / "docker-compose.build.yaml"
 E2E_COMPOSE = SERVER / "docker-compose.e2e.yaml"
 ENV_FILE = SERVER / ".env"
+MCP_CONTRACT_SMOKE = ROOT / "scripts" / "mcp_contract_smoke.py"
 REQUIRED_SECRETS = (
     "POSTGRES_PASSWORD",
     "NEO4J_PASSWORD",
@@ -67,6 +74,16 @@ RUNTIME_ENV_NAMES = (
     "YIQIAO_DIR",
     "YIQIAO_DISABLE_SPACY_DOWNLOAD",
 )
+MCP_RUNTIME_ENV_NAMES = (
+    "MCP_BIND_ADDRESS",
+    "MCP_PORT",
+    "YIQIAO_MCP_IMAGE",
+    "YIQIAO_MCP_PROFILE",
+    "YIQIAO_MCP_ALLOWED_HOSTS",
+    "YIQIAO_MCP_ALLOWED_ORIGINS",
+    "YIQIAO_MCP_CONNECT_TIMEOUT",
+    "YIQIAO_MCP_REQUEST_TIMEOUT",
+)
 E2E_PROVIDER_KEY = "local-e2e-only"
 E2E_PROVIDER_BASE_URL = "http://model-stub:8080/v1"
 E2E_LLM_MODEL = "yiqiao-e2e"
@@ -76,10 +93,30 @@ EXPECTED_MIGRATION = "019"
 PROVIDER_SETUP_DETAIL = (
     "Model provider credentials are not configured. Complete provider setup before using memory operations."
 )
+MCP_KEY_ENV = "YIQIAO_MCP_SMOKE_API_KEY"
+MCP_CONTAINER_URL = "http://yiqiao-mcp:8000/mcp"
+MCP_CONTRACT_CONTAINER_PATH = "/opt/yiqiao/mcp_contract_smoke.py"
+_PSQL_VARIABLE_NAME = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
+_PSQL_VARIABLE_VALUE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,254}$")
 
 
 class SmokeError(RuntimeError):
     pass
+
+
+@dataclass(frozen=True)
+class ProjectApiKey:
+    id: str
+    project_id: str
+    value: str = field(repr=False)
+
+
+def _redact(value: str, sensitive_values: Iterable[str]) -> str:
+    redacted = value
+    candidates = {candidate for candidate in sensitive_values if candidate}
+    for candidate in sorted(candidates, key=len, reverse=True):
+        redacted = redacted.replace(candidate, "[REDACTED]")
+    return redacted
 
 
 def _request_json(
@@ -130,6 +167,121 @@ def _wait_for_health(service: str, url: str, timeout: float) -> dict[str, Any]:
     if not isinstance(response, dict) or response.get("status") != "ok":
         raise SmokeError(f"Unexpected {service} health response: {response!r}")
     return response
+
+
+def _wait_for_mcp_health(mcp_url: str, timeout: float) -> dict[str, Any]:
+    return _wait_for_health("MCP", f"{mcp_url}/healthz", timeout)
+
+
+def _wait_until(
+    description: str,
+    timeout: float,
+    probe: Callable[[], Any],
+    ready: Callable[[Any], bool],
+    *,
+    interval: float = 0.5,
+) -> Any:
+    deadline = time.monotonic() + timeout
+    last_value: Any = None
+    last_error: Exception | None = None
+    while time.monotonic() < deadline:
+        try:
+            last_value = probe()
+            last_error = None
+            if ready(last_value):
+                return last_value
+        except Exception as exc:  # noqa: BLE001 - report the final bounded-polling failure
+            last_error = exc
+        time.sleep(interval)
+    detail = f"last error: {last_error}" if last_error is not None else f"last value: {last_value!r}"
+    raise SmokeError(f"Timed out waiting for {description} ({detail})")
+
+
+def _expect_http_error(
+    method: str,
+    url: str,
+    expected_status: int,
+    *,
+    payload: dict[str, Any] | None = None,
+    headers: dict[str, str] | None = None,
+    timeout: float = 15,
+) -> Any:
+    body = json.dumps(payload).encode("utf-8") if payload is not None else None
+    request_headers = {"Accept": "application/json", **(headers or {})}
+    if body is not None:
+        request_headers["Content-Type"] = "application/json"
+    request = urllib.request.Request(url, data=body, headers=request_headers, method=method)
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            response.read()
+            raise SmokeError(f"{method} {url} unexpectedly returned HTTP {response.status}")
+    except urllib.error.HTTPError as exc:
+        raw = exc.read()
+        if exc.code != expected_status:
+            detail = raw.decode("utf-8", errors="replace")
+            raise SmokeError(f"{method} {url} returned HTTP {exc.code}, expected {expected_status}: {detail}") from exc
+    except (OSError, urllib.error.URLError) as exc:
+        raise SmokeError(f"{method} {url} failed: {exc}") from exc
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise SmokeError(f"{method} {url} returned invalid JSON for expected HTTP {expected_status}") from exc
+
+
+def _run_mcp_contract(
+    stack: Stack,
+    mode: str,
+    api_key: str,
+    timeout: float,
+    *,
+    expect_success: bool,
+    sensitive_values: Iterable[str] = (),
+) -> subprocess.CompletedProcess[str]:
+    command = [
+        "docker",
+        "run",
+        "--rm",
+        "--network",
+        f"{stack.project}_backend",
+        "--read-only",
+        "--security-opt",
+        "no-new-privileges:true",
+        "--cap-drop",
+        "ALL",
+        "--env",
+        MCP_KEY_ENV,
+        "--volume",
+        f"{MCP_CONTRACT_SMOKE}:{MCP_CONTRACT_CONTAINER_PATH}:ro",
+        stack.env["YIQIAO_MCP_IMAGE"],
+        "python",
+        MCP_CONTRACT_CONTAINER_PATH,
+        mode,
+        "--url",
+        MCP_CONTAINER_URL,
+        "--key-env",
+        MCP_KEY_ENV,
+        "--timeout",
+        str(timeout),
+    ]
+    contract_env = os.environ.copy()
+    contract_env[MCP_KEY_ENV] = api_key
+    result = subprocess.run(
+        command,
+        cwd=ROOT,
+        env=contract_env,
+        check=False,
+        text=True,
+        capture_output=True,
+    )
+    succeeded = result.returncode == 0
+    if succeeded == expect_success:
+        return result
+
+    outcome = "failed" if expect_success else "unexpectedly passed"
+    output = "\n".join(part for part in (result.stdout, result.stderr) if part).strip()
+    safe_output = _redact(output, (*sensitive_values, api_key))
+    detail = f"\n{safe_output}" if safe_output else ""
+    raise SmokeError(f"MCP {mode} contract {outcome} ({result.returncode}){detail}")
 
 
 def _initializer_command(platform: str | None = None) -> list[str]:
@@ -253,8 +405,9 @@ class Stack:
     def __init__(self, args: argparse.Namespace):
         self.args = args
         self.project = args.project_name
+        self.mcp_port = int(getattr(args, "mcp_port", 18765))
         self.env = os.environ.copy()
-        for key in (*REQUIRED_SECRETS, *PROVIDER_CREDENTIAL_ENV_NAMES, *RUNTIME_ENV_NAMES):
+        for key in (*REQUIRED_SECRETS, *PROVIDER_CREDENTIAL_ENV_NAMES, *RUNTIME_ENV_NAMES, *MCP_RUNTIME_ENV_NAMES):
             self.env.pop(key, None)
         self.env.update(
             {
@@ -262,12 +415,21 @@ class Stack:
                 "API_PORT": str(args.api_port),
                 "DASHBOARD_BIND_ADDRESS": "127.0.0.1",
                 "DASHBOARD_PORT": str(args.dashboard_port),
+                "MCP_BIND_ADDRESS": "127.0.0.1",
+                "MCP_PORT": str(self.mcp_port),
                 "YIQIAO_API_IMAGE": f"{self.project}-api:smoke",
                 "YIQIAO_DASHBOARD_IMAGE": f"{self.project}-dashboard:smoke",
+                "YIQIAO_MCP_IMAGE": f"{self.project}-mcp:smoke",
+                "YIQIAO_MCP_PROFILE": "memory",
+                "YIQIAO_MCP_ALLOWED_HOSTS": "127.0.0.1:*,localhost:*,[::1]:*,yiqiao-mcp:*",
+                "YIQIAO_MCP_ALLOWED_ORIGINS": "http://127.0.0.1:*,http://localhost:*,http://[::1]:*",
+                "YIQIAO_MCP_CONNECT_TIMEOUT": "5",
+                "YIQIAO_MCP_REQUEST_TIMEOUT": "30",
                 "YIQIAO_PULL_POLICY": "build",
             }
         )
         self.created_env = False
+        self._api_key_values: list[str] = []
         self.compose = [
             "docker",
             "compose",
@@ -305,7 +467,13 @@ class Stack:
 
         self.env.update(_load_required_secrets(ENV_FILE))
 
-    def run(self, *args: str, capture: bool = False, check: bool = True) -> subprocess.CompletedProcess[str]:
+    def run(
+        self,
+        *args: str,
+        capture: bool = False,
+        check: bool = True,
+        input_text: str | None = None,
+    ) -> subprocess.CompletedProcess[str]:
         result = subprocess.run(
             [*self.compose, *args],
             cwd=SERVER,
@@ -313,11 +481,51 @@ class Stack:
             check=False,
             text=True,
             capture_output=capture,
+            input=input_text,
         )
         if check and result.returncode:
             output = "\n".join(part for part in (result.stdout, result.stderr) if part).strip()
             raise SmokeError(f"docker compose {' '.join(args)} failed ({result.returncode})\n{output}")
         return result
+
+    @property
+    def api_key_values(self) -> tuple[str, ...]:
+        return tuple(self._api_key_values)
+
+    def remember_api_key(self, value: str) -> None:
+        if value and value not in self._api_key_values:
+            self._api_key_values.append(value)
+
+    def redact(self, value: str) -> str:
+        return _redact(value, self._api_key_values)
+
+    def psql(self, query: str, *, variables: Mapping[str, str] | None = None) -> str:
+        variable_args: list[str] = []
+        for name, value in sorted((variables or {}).items()):
+            if not _PSQL_VARIABLE_NAME.fullmatch(name):
+                raise SmokeError(f"Unsafe psql variable name: {name!r}")
+            if not _PSQL_VARIABLE_VALUE.fullmatch(value):
+                raise SmokeError(f"Unsafe psql variable value for {name}")
+            variable_args.extend(["-v", f"{name}={value}"])
+        result = self.run(
+            "exec",
+            "-T",
+            "postgres",
+            "psql",
+            "-v",
+            "ON_ERROR_STOP=1",
+            *variable_args,
+            "-U",
+            "postgres",
+            "-d",
+            "yiqiao_app",
+            "-At",
+            "-F",
+            "|",
+            capture=True,
+            input_text=f"{query.rstrip()}\n",
+        )
+        return result.stdout.strip()
 
     def up(self, *, rebuild: bool) -> None:
         args = ["up", "--detach", "--remove-orphans"]
@@ -358,7 +566,250 @@ def _assert_migration(stack: Stack) -> str:
     return revision
 
 
-def _exercise_api(api_url: str, marker: str) -> tuple[str, str, str]:
+def _jwt_headers(access_token: str, project_id: str | None = None) -> dict[str, str]:
+    headers = {"Authorization": f"Bearer {access_token}"}
+    if project_id is not None:
+        headers["X-Project-ID"] = project_id
+    return headers
+
+
+def _response_id(response: Any, resource: str) -> str:
+    value = str(response.get("id") or "") if isinstance(response, dict) else ""
+    if not value:
+        raise SmokeError(f"{resource} creation did not return an ID")
+    return value
+
+
+def _create_acceptance_projects(api_url: str, access_token: str) -> tuple[str, str]:
+    suffix = secrets.token_hex(4)
+    organization = _request_json(
+        "POST",
+        f"{api_url}/api/v1/orgs/organizations/",
+        payload={"name": f"MCP acceptance {suffix}"},
+        headers=_jwt_headers(access_token),
+    )
+    organization_id = _response_id(organization, "MCP acceptance organization")
+
+    project_ids = []
+    for label in ("A", "B"):
+        project = _request_json(
+            "POST",
+            f"{api_url}/api/v1/orgs/organizations/{organization_id}/projects/",
+            payload={"name": f"MCP acceptance {label} {suffix}"},
+            headers=_jwt_headers(access_token),
+        )
+        project_ids.append(_response_id(project, f"MCP acceptance project {label}"))
+    if project_ids[0] == project_ids[1]:
+        raise SmokeError("MCP acceptance projects did not receive distinct IDs")
+    return project_ids[0], project_ids[1]
+
+
+def _create_project_api_key(
+    stack: Stack,
+    api_url: str,
+    access_token: str,
+    project_id: str,
+    label: str,
+    *,
+    scopes: list[str] | None = None,
+    expires_at: datetime | None = None,
+) -> ProjectApiKey:
+    payload: dict[str, Any] = {"label": label, "project_id": project_id}
+    if scopes is not None:
+        payload["scopes"] = scopes
+    if expires_at is not None:
+        payload["expires_at"] = expires_at.isoformat()
+    response = _request_json(
+        "POST",
+        f"{api_url}/api-keys",
+        payload=payload,
+        headers=_jwt_headers(access_token, project_id),
+    )
+    key_id = _response_id(response, f"{label} API key")
+    value = str(response.get("key") or "") if isinstance(response, dict) else ""
+    response_project = str(response.get("project_id") or "") if isinstance(response, dict) else ""
+    if not value:
+        raise SmokeError(f"{label} API key creation did not return the one-time key")
+    stack.remember_api_key(value)
+    if response_project != project_id:
+        raise SmokeError(f"{label} API key was not bound to the selected project")
+    return ProjectApiKey(id=key_id, project_id=project_id, value=value)
+
+
+def _memory_ids(response: Any) -> list[str]:
+    values = (
+        response.get("results", []) if isinstance(response, dict) else response if isinstance(response, list) else []
+    )
+    return [
+        str(item.get("id") or item.get("memory_id") or "")
+        for item in values
+        if isinstance(item, dict) and (item.get("id") or item.get("memory_id"))
+    ]
+
+
+def _add_known_memory(api_url: str, project_key: ProjectApiKey, marker: str) -> str:
+    response = _request_json(
+        "POST",
+        f"{api_url}/memories",
+        payload={
+            "messages": [{"role": "user", "content": marker}],
+            "user_id": "mcp-cross-project-user",
+            "infer": False,
+        },
+        headers={"X-API-Key": project_key.value},
+        timeout=120,
+    )
+    memory_ids = _memory_ids(response)
+    if marker not in _memory_texts(response) or not memory_ids:
+        raise SmokeError("Cross-project probe add did not return its memory and ID")
+    return memory_ids[0]
+
+
+def _integer_fields(value: str, expected: int, description: str) -> tuple[int, ...]:
+    fields = value.split("|") if value else []
+    if len(fields) != expected:
+        raise SmokeError(f"Unexpected {description} SQL result")
+    try:
+        return tuple(int(field) for field in fields)
+    except ValueError as exc:
+        raise SmokeError(f"Non-numeric {description} SQL result") from exc
+
+
+def _key_log_snapshot(stack: Stack, project_key: ProjectApiKey) -> tuple[int, int, int, int]:
+    output = stack.psql(
+        """
+SELECT
+    COUNT(*),
+    COUNT(*) FILTER (WHERE operation = 'memory_write' AND status_code < 400),
+    COUNT(*) FILTER (WHERE operation = 'memory_search' AND status_code < 400),
+    COUNT(*) FILTER (WHERE project_id IS DISTINCT FROM :'project_id')
+FROM request_logs
+WHERE api_key_id = :'key_id'::uuid;
+""".strip(),
+        variables={"key_id": project_key.id, "project_id": project_key.project_id},
+    )
+    values = _integer_fields(output, 4, "request-log accounting")
+    return values[0], values[1], values[2], values[3]
+
+
+def _wait_for_key_accounting(
+    stack: Stack,
+    project_key: ProjectApiKey,
+    *,
+    minimum_total: int,
+    minimum_writes: int,
+    minimum_searches: int,
+    timeout: float,
+) -> tuple[int, int, int, int]:
+    snapshot = _wait_until(
+        f"request-log accounting for key {project_key.id}",
+        timeout,
+        lambda: _key_log_snapshot(stack, project_key),
+        lambda value: value[0] >= minimum_total and value[1] >= minimum_writes and value[2] >= minimum_searches,
+    )
+    if snapshot[3]:
+        raise SmokeError(f"API key {project_key.id} was attributed to {snapshot[3]} request log(s) outside its project")
+    return snapshot
+
+
+def _request_status_count(stack: Stack, project_key: ProjectApiKey, operation: str, status: int) -> int:
+    if operation not in {"memory_read", "memory_search", "memory_write"}:
+        raise SmokeError(f"Unsupported request-log operation: {operation}")
+    output = stack.psql(
+        """
+SELECT COUNT(*)
+FROM request_logs
+WHERE api_key_id = :'key_id'::uuid
+  AND project_id = :'project_id'
+  AND operation = :'operation'
+  AND status_code = :'status'::integer;
+""".strip(),
+        variables={
+            "key_id": project_key.id,
+            "operation": operation,
+            "project_id": project_key.project_id,
+            "status": str(status),
+        },
+    )
+    return _integer_fields(output, 1, "request-log status")[0]
+
+
+def _wait_for_request_status(
+    stack: Stack,
+    project_key: ProjectApiKey,
+    operation: str,
+    status: int,
+    timeout: float,
+) -> None:
+    _wait_until(
+        f"HTTP {status} {operation} accounting for key {project_key.id}",
+        timeout,
+        lambda: _request_status_count(stack, project_key, operation, status),
+        lambda count: count >= 1,
+    )
+
+
+def _create_webhook(api_url: str, access_token: str, project_id: str, label: str) -> str:
+    response = _request_json(
+        "POST",
+        f"{api_url}/webhooks",
+        payload={
+            "name": label,
+            "url": "http://model-stub:8080/webhook",
+            "events": ["memory.added"],
+        },
+        headers=_jwt_headers(access_token, project_id),
+    )
+    return _response_id(response, label)
+
+
+def _webhook_delivery_state(
+    api_url: str,
+    access_token: str,
+    project_id: str,
+    hook_id: str,
+) -> tuple[str | None, str | None]:
+    response = _request_json(
+        "GET",
+        f"{api_url}/webhooks",
+        headers=_jwt_headers(access_token, project_id),
+    )
+    if not isinstance(response, list):
+        raise SmokeError("Webhook listing returned an unexpected response")
+    hook = next((item for item in response if isinstance(item, dict) and str(item.get("id")) == hook_id), None)
+    if hook is None:
+        raise SmokeError(f"Webhook {hook_id} was not listed in its project")
+    status = str(hook.get("last_delivery_status")) if hook.get("last_delivery_status") is not None else None
+    delivered_at = str(hook.get("last_delivery_at")) if hook.get("last_delivery_at") is not None else None
+    return status, delivered_at
+
+
+def _set_search_quota(api_url: str, access_token: str, project_key: ProjectApiKey) -> None:
+    response = _request_json(
+        "PUT",
+        f"{api_url}/usage/policies",
+        payload={
+            "scope_type": "api_key",
+            "scope_id": project_key.id,
+            "project_id": project_key.project_id,
+            "policies": [
+                {
+                    "metric": "memory_searches",
+                    "period": "day",
+                    "limit_value": 1,
+                    "mode": "hard",
+                    "warning_threshold": 0.8,
+                }
+            ],
+        },
+        headers=_jwt_headers(access_token, project_key.project_id),
+    )
+    policies = response.get("policies") if isinstance(response, dict) else None
+    if not isinstance(policies, list) or len(policies) != 1:
+        raise SmokeError("Search quota policy was not accepted")
+
+
+def _exercise_api(stack: Stack, api_url: str, marker: str) -> tuple[str, str, str]:
     tokens = _request_json(
         "POST",
         f"{api_url}/auth/register",
@@ -385,6 +836,7 @@ def _exercise_api(api_url: str, marker: str) -> tuple[str, str, str]:
     api_key = str(created_key.get("key") or "") if isinstance(created_key, dict) else ""
     if not api_key:
         raise SmokeError("API key creation did not return the one-time key")
+    stack.remember_api_key(api_key)
 
     key_headers = {"X-API-Key": api_key, "X-Project-ID": "default-project"}
     added = _request_json(
@@ -413,6 +865,265 @@ def _exercise_api(api_url: str, marker: str) -> tuple[str, str, str]:
     return access_token, api_key, marker
 
 
+def _exercise_mcp_acceptance(
+    stack: Stack,
+    api_url: str,
+    access_token: str,
+    timeout: float,
+) -> ProjectApiKey:
+    contract_timeout = min(timeout, 120.0)
+    polling_timeout = min(timeout, 60.0)
+    project_a, project_b = _create_acceptance_projects(api_url, access_token)
+    key_a = _create_project_api_key(stack, api_url, access_token, project_a, "MCP project A")
+    key_b = _create_project_api_key(stack, api_url, access_token, project_b, "MCP project B")
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+        futures = [
+            executor.submit(
+                _run_mcp_contract,
+                stack,
+                "hermes",
+                project_key.value,
+                contract_timeout,
+                expect_success=True,
+                sensitive_values=stack.api_key_values,
+            )
+            for project_key in (key_a, key_b)
+        ]
+        for future in futures:
+            future.result()
+
+    _wait_for_key_accounting(
+        stack,
+        key_a,
+        minimum_total=3,
+        minimum_writes=1,
+        minimum_searches=1,
+        timeout=polling_timeout,
+    )
+    _wait_for_key_accounting(
+        stack,
+        key_b,
+        minimum_total=3,
+        minimum_writes=1,
+        minimum_searches=1,
+        timeout=polling_timeout,
+    )
+    _run_mcp_contract(
+        stack,
+        "openclaw",
+        key_a.value,
+        contract_timeout,
+        expect_success=True,
+        sensitive_values=stack.api_key_values,
+    )
+
+    cross_project_marker = f"MCP project A isolation {secrets.token_hex(8)}"
+    project_a_memory_id = _add_known_memory(api_url, key_a, cross_project_marker)
+    _expect_http_error(
+        "GET",
+        f"{api_url}/memories/{project_a_memory_id}",
+        404,
+        headers={"X-API-Key": key_b.value},
+    )
+    _expect_http_error(
+        "POST",
+        f"{api_url}/search",
+        403,
+        payload={"query": cross_project_marker, "filters": {"user_id": "mcp-cross-project-user"}},
+        headers={"X-API-Key": key_a.value, "X-Project-ID": project_b},
+    )
+
+    revoked_key = _create_project_api_key(stack, api_url, access_token, project_a, "MCP revoked")
+    _run_mcp_contract(
+        stack,
+        "openclaw",
+        revoked_key.value,
+        contract_timeout,
+        expect_success=True,
+        sensitive_values=stack.api_key_values,
+    )
+    _request_json(
+        "DELETE",
+        f"{api_url}/api-keys/{revoked_key.id}",
+        headers=_jwt_headers(access_token, project_a),
+    )
+    _run_mcp_contract(
+        stack,
+        "openclaw",
+        revoked_key.value,
+        contract_timeout,
+        expect_success=False,
+        sensitive_values=stack.api_key_values,
+    )
+
+    expired_key = _create_project_api_key(
+        stack,
+        api_url,
+        access_token,
+        project_a,
+        "MCP expired",
+        expires_at=datetime.now(timezone.utc) + timedelta(minutes=10),
+    )
+    _run_mcp_contract(
+        stack,
+        "openclaw",
+        expired_key.value,
+        contract_timeout,
+        expect_success=True,
+        sensitive_values=stack.api_key_values,
+    )
+    updated = stack.psql(
+        """
+WITH expired AS (
+    UPDATE api_keys
+    SET expires_at = NOW() - INTERVAL '1 minute'
+    WHERE id = :'key_id'::uuid
+    RETURNING 1
+)
+SELECT COUNT(*) FROM expired;
+""".strip(),
+        variables={"key_id": expired_key.id},
+    )
+    if updated != "1":
+        raise SmokeError("Expired-key probe did not update exactly one API key")
+    _run_mcp_contract(
+        stack,
+        "openclaw",
+        expired_key.value,
+        contract_timeout,
+        expect_success=False,
+        sensitive_values=stack.api_key_values,
+    )
+
+    read_only_key = _create_project_api_key(
+        stack,
+        api_url,
+        access_token,
+        project_a,
+        "MCP read only",
+        scopes=["memory:read"],
+    )
+    _run_mcp_contract(
+        stack,
+        "openclaw",
+        read_only_key.value,
+        contract_timeout,
+        expect_success=True,
+        sensitive_values=stack.api_key_values,
+    )
+    _run_mcp_contract(
+        stack,
+        "hermes",
+        read_only_key.value,
+        contract_timeout,
+        expect_success=False,
+        sensitive_values=stack.api_key_values,
+    )
+    _wait_for_key_accounting(
+        stack,
+        read_only_key,
+        minimum_total=2,
+        minimum_writes=0,
+        minimum_searches=1,
+        timeout=polling_timeout,
+    )
+    _wait_for_request_status(stack, read_only_key, "memory_write", 403, polling_timeout)
+
+    write_only_key = _create_project_api_key(
+        stack,
+        api_url,
+        access_token,
+        project_a,
+        "MCP write only",
+        scopes=["memory:write"],
+    )
+    _run_mcp_contract(
+        stack,
+        "hermes",
+        write_only_key.value,
+        contract_timeout,
+        expect_success=False,
+        sensitive_values=stack.api_key_values,
+    )
+    _wait_for_key_accounting(
+        stack,
+        write_only_key,
+        minimum_total=2,
+        minimum_writes=1,
+        minimum_searches=0,
+        timeout=polling_timeout,
+    )
+    _wait_for_request_status(stack, write_only_key, "memory_search", 403, polling_timeout)
+
+    quota_key = _create_project_api_key(stack, api_url, access_token, project_a, "MCP search quota")
+    _set_search_quota(api_url, access_token, quota_key)
+    _run_mcp_contract(
+        stack,
+        "openclaw",
+        quota_key.value,
+        contract_timeout,
+        expect_success=True,
+        sensitive_values=stack.api_key_values,
+    )
+    _wait_for_key_accounting(
+        stack,
+        quota_key,
+        minimum_total=1,
+        minimum_writes=0,
+        minimum_searches=1,
+        timeout=polling_timeout,
+    )
+    _run_mcp_contract(
+        stack,
+        "openclaw",
+        quota_key.value,
+        contract_timeout,
+        expect_success=False,
+        sensitive_values=stack.api_key_values,
+    )
+    _wait_for_request_status(stack, quota_key, "memory_search", 429, polling_timeout)
+
+    hook_a = _create_webhook(api_url, access_token, project_a, "MCP project A delivery")
+    hook_b = _create_webhook(api_url, access_token, project_b, "MCP project B isolation")
+    _run_mcp_contract(
+        stack,
+        "hermes",
+        key_a.value,
+        contract_timeout,
+        expect_success=True,
+        sensitive_values=stack.api_key_values,
+    )
+    state_a = _wait_until(
+        "project A webhook dispatch",
+        polling_timeout,
+        lambda: _webhook_delivery_state(api_url, access_token, project_a, hook_a),
+        lambda state: state[0] is not None and state[1] is not None,
+    )
+    if not state_a[0]:
+        raise SmokeError("Project A webhook dispatch did not record a delivery status")
+    state_b = _webhook_delivery_state(api_url, access_token, project_b, hook_b)
+    if state_b != (None, None):
+        raise SmokeError("Project B webhook was dispatched for a project A MCP write")
+
+    for project_key, minimum_total in (
+        (key_a, 8),
+        (key_b, 4),
+        (read_only_key, 2),
+        (write_only_key, 2),
+        (quota_key, 2),
+    ):
+        _wait_for_key_accounting(
+            stack,
+            project_key,
+            minimum_total=minimum_total,
+            minimum_writes=0,
+            minimum_searches=0,
+            timeout=polling_timeout,
+        )
+    return key_a
+
+
 def _assert_persisted(api_url: str, api_key: str, marker: str) -> None:
     searched = _request_json(
         "POST",
@@ -430,13 +1141,20 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--project-name", default=f"yiqiao-release-smoke-{os.getpid()}-{secrets.token_hex(4)}")
     parser.add_argument("--api-port", type=int, default=18888)
     parser.add_argument("--dashboard-port", type=int, default=13000)
+    parser.add_argument("--mcp-port", type=int, default=18765)
     parser.add_argument("--timeout", type=float, default=420)
-    parser.add_argument("--no-cache", action="store_true", help="Build API and dashboard images without cache")
+    parser.add_argument("--no-cache", action="store_true", help="Build API, dashboard, and MCP images without cache")
     parser.add_argument("--skip-build", action="store_true", help="Use images already tagged for this project")
     parser.add_argument("--keep", action="store_true", help="Leave the isolated stack and volumes running")
     args = parser.parse_args()
     if args.no_cache and args.skip_build:
         parser.error("--no-cache and --skip-build cannot be used together")
+    if not all(1 <= port <= 65535 for port in (args.api_port, args.dashboard_port, args.mcp_port)):
+        parser.error("service ports must be between 1 and 65535")
+    if len({args.api_port, args.dashboard_port, args.mcp_port}) != 3:
+        parser.error("service ports must be distinct")
+    if not math.isfinite(args.timeout) or args.timeout <= 0:
+        parser.error("--timeout must be a positive finite number")
     return args
 
 
@@ -445,34 +1163,51 @@ def main() -> int:
     stack = Stack(args)
     api_url = f"http://127.0.0.1:{args.api_port}"
     dashboard_url = f"http://127.0.0.1:{args.dashboard_port}"
+    mcp_url = f"http://127.0.0.1:{args.mcp_port}"
     succeeded = False
     try:
         stack.prepare()
         stack.run("config", "--quiet")
         if args.no_cache:
-            stack.run("build", "--no-cache", "yiqiao", "yiqiao-dashboard")
+            stack.run("build", "--no-cache", "yiqiao", "yiqiao-dashboard", "yiqiao-mcp")
         stack.up(rebuild=not args.skip_build and not args.no_cache)
 
         _wait_for_health("API", f"{api_url}/api/health", args.timeout)
         _wait_for_health("dashboard", f"{dashboard_url}/api/health", args.timeout)
+        _wait_for_mcp_health(mcp_url, args.timeout)
         revision = _assert_migration(stack)
         marker = f"YiQiao release marker {secrets.token_hex(8)} persists across restarts."
-        _admin_access_token, api_key, marker = _exercise_api(api_url, marker)
+        admin_access_token, api_key, marker = _exercise_api(stack, api_url, marker)
+        restart_mcp_key = _exercise_mcp_acceptance(
+            stack,
+            api_url,
+            admin_access_token,
+            args.timeout,
+        )
 
         stack.run("down", "--remove-orphans")
         stack.up(rebuild=False)
         _wait_for_health("API", f"{api_url}/api/health", args.timeout)
         _wait_for_health("dashboard", f"{dashboard_url}/api/health", args.timeout)
+        _wait_for_mcp_health(mcp_url, args.timeout)
         _assert_persisted(api_url, api_key, marker)
+        _run_mcp_contract(
+            stack,
+            "openclaw",
+            restart_mcp_key.value,
+            min(args.timeout, 120.0),
+            expect_success=True,
+            sensitive_values=stack.api_key_values,
+        )
 
         print(
-            f"PASS: migration {revision}; health, admin, API key, add/search, project isolation, "
-            "and restart persistence verified."
+            f"PASS: migration {revision}; API/dashboard/MCP health, admin, scoped keys, MCP contracts, "
+            "project isolation, quota, webhooks, accounting, and restart persistence verified."
         )
         succeeded = True
         return 0
     except (SmokeError, OSError, subprocess.SubprocessError) as exc:
-        print(f"FAIL: {exc}", file=sys.stderr)
+        print(f"FAIL: {stack.redact(str(exc))}", file=sys.stderr)
         stack.diagnostics()
         return 1
     finally:

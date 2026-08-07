@@ -34,9 +34,13 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 30
 REFRESH_TOKEN_EXPIRE_DAYS = 30
 ADMIN_API_KEY = os.environ.get("ADMIN_API_KEY", "")
 AUTH_DISABLED = os.environ.get("AUTH_DISABLED", "").lower() in {"1", "true", "yes", "on"}
+MEMORY_READ_SCOPE = "memory:read"
+MEMORY_WRITE_SCOPE = "memory:write"
+API_KEY_SCOPES = (MEMORY_READ_SCOPE, MEMORY_WRITE_SCOPE)
 _API_KEY_CACHE_LIMIT = 1024
 _api_key_cache: OrderedDict[str, uuid.UUID] = OrderedDict()
 _api_key_cache_lock = threading.RLock()
+_API_KEY_SCOPES_UNSET = object()
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -210,7 +214,7 @@ def _validate_api_key(candidate: APIKey, request: Request, db: Session) -> User:
     request.state.project_id = candidate.project_id
     request.state.api_key_id = str(candidate.id)
     request.state.api_key_type = candidate.key_type
-    request.state.api_key_scopes = list(candidate.scopes or [])
+    request.state.api_key_scopes = None if candidate.scopes is None else list(candidate.scopes)
     candidate.last_used_at = now
     db.commit()
     user = db.get(User, candidate.created_by)
@@ -263,10 +267,25 @@ def _project_role(user: User | None, request: Request, db: Session) -> str | Non
     return member_role(_workspace_settings(db), user.email, get_project_id(request))
 
 
+def enforce_api_key_scope(request: Request, *, write: bool) -> None:
+    """Apply the project-key scope matrix to routes with custom project RBAC."""
+    if getattr(request.state, "auth_type", "none") != "api_key":
+        return
+    scopes = getattr(request.state, "api_key_scopes", _API_KEY_SCOPES_UNSET)
+    required_scope = MEMORY_WRITE_SCOPE if write else MEMORY_READ_SCOPE
+    if scopes is _API_KEY_SCOPES_UNSET or (scopes is not None and required_scope not in scopes):
+        raise _credential_error(
+            403,
+            "insufficient_scope",
+            f"API key requires the {required_scope} scope.",
+        )
+
+
 def _require_project_role(user: User | None, request: Request, db: Session, *, write: bool) -> User | None:
     auth_type = getattr(request.state, "auth_type", "none")
     if auth_type in {"admin_api_key", "disabled"}:
         return user
+    enforce_api_key_scope(request, write=write)
     role = _project_role(user, request, db)
     allowed = role_allows_write(role) if write else role_allows_read(role)
     if not allowed:
@@ -344,12 +363,34 @@ async def require_dashboard_user(
     return user
 
 
+async def require_account_user(
+    request: Request,
+    user: User = Depends(require_auth),
+) -> User:
+    """Preserve legacy instance auth for account routes while rejecting project credentials."""
+    if getattr(request.state, "auth_type", "none") == "api_key":
+        raise _credential_error(403, "dashboard_login_required", "Dashboard login is required.")
+    return user
+
+
 async def require_dashboard_project_write(
     request: Request,
     user: User = Depends(require_dashboard_user),
     db: Session = Depends(get_db),
 ) -> User:
+    if find_project(_workspace_settings(db), get_project_id(request)) is None:
+        raise HTTPException(status_code=404, detail="Project not found.")
     return _require_project_role(user, request, db, write=True)
+
+
+async def require_dashboard_project_read(
+    request: Request,
+    user: User = Depends(require_dashboard_user),
+    db: Session = Depends(get_db),
+) -> User:
+    if find_project(_workspace_settings(db), get_project_id(request)) is None:
+        raise HTTPException(status_code=404, detail="Project not found.")
+    return _require_project_role(user, request, db, write=False)
 
 
 async def require_project_read(

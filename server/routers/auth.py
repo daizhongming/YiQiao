@@ -10,7 +10,7 @@ from auth import (
     decode_token,
     dummy_verify_password,
     hash_password,
-    require_auth,
+    require_account_user,
     verify_password,
 )
 from db import get_db
@@ -186,14 +186,14 @@ def refresh(request: Request, body: RefreshRequest, db: Session = Depends(get_db
 
 
 @router.get("/me", response_model=UserResponse)
-def me(user: User = Depends(require_auth)):
+def me(user: User = Depends(require_account_user)):
     return user
 
 
 @router.patch("/me", response_model=UserResponse)
 def update_me(
     body: UpdateProfileRequest,
-    user: User = Depends(require_auth),
+    user: User = Depends(require_account_user),
     db: Session = Depends(get_db),
 ):
     if body.name is not None and body.name.strip():
@@ -220,7 +220,7 @@ def update_me(
 
 @router.delete("/me", response_model=MessageResponse)
 def delete_me(
-    user: User = Depends(require_auth),
+    user: User = Depends(require_account_user),
     db: Session = Depends(get_db),
 ):
     workspace = get_json(db, WORKSPACE_KEY, DEFAULT_WORKSPACE_SETTINGS)
@@ -237,7 +237,7 @@ def delete_me(
 @router.post("/change-password", response_model=MessageResponse)
 def change_password(
     body: ChangePasswordRequest,
-    user: User = Depends(require_auth),
+    user: User = Depends(require_account_user),
     db: Session = Depends(get_db),
 ):
     if not verify_password(body.current_password, user.password_hash):
@@ -257,7 +257,7 @@ def change_password(
 
 
 @router.post("/onboarding-complete", response_model=MessageResponse)
-def onboarding_complete(body: OnboardingCompleteRequest, user: User = Depends(require_auth)):
+def onboarding_complete(body: OnboardingCompleteRequest, user: User = Depends(require_account_user)):
     """Fire the one-shot telemetry event after the setup wizard reaches its success state."""
     capture_onboarding_completed(email=user.email, use_case=body.use_case)
     return MessageResponse(message="Onboarding completed.")

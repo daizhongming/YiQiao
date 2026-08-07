@@ -41,6 +41,7 @@ docker compose up -d
 | --- | --- | --- |
 | 控制台 | <http://localhost:3000> | `DASHBOARD_PORT` |
 | REST API | <http://localhost:8888> | `API_PORT` |
+| MCP Streamable HTTP | <http://localhost:8765/mcp> | `MCP_PORT` |
 | OpenAPI | <http://localhost:8888/docs> | 跟随 `API_PORT` |
 | 健康检查 | <http://localhost:8888/api/health> | 跟随 `API_PORT` |
 
@@ -156,11 +157,13 @@ from yiqiao import Memory, AsyncMemory
 ## 架构
 
 ```text
-浏览器 / API 客户端
+浏览器 / API / MCP 客户端
         |
         +--> 控制台 :3000
         |         |
-        +---------+--> YiQiao API :8888 --> 已选模型服务商
+        +--> MCP companion :8765 --REST--+
+        |                              |
+        +---------+--------------------+--> YiQiao API :8888 --> 已选模型服务商
                              |  \
                              |   +--> Neo4j Community（图关系）
                              +------> PostgreSQL + pgvector（身份、设置、
@@ -184,12 +187,16 @@ from yiqiao import Memory, AsyncMemory
 服务不映射到主机端口，并确保密钥不进入版本控制。不要将 API 或控制台直接暴露到
 互联网；请通过可信的反向代理终止 TLS，并将访问限制在预期网络中。
 
-端口、持久化、备份、升级、源码构建和卸载说明见
-[运维指南](docs/yiqiao/OPERATIONS.zh-CN.md)。
+stdio/Streamable HTTP 和安全捕获契约见
+[MCP companion](docs/yiqiao/MCP.zh-CN.md)与
+[Agent 集成](docs/yiqiao/AGENT_INTEGRATION.zh-CN.md)。端口、持久化、备份、
+升级、源码构建和卸载说明见[运维指南](docs/yiqiao/OPERATIONS.zh-CN.md)。
 
 ## 文档
 
 - [运维指南](docs/yiqiao/OPERATIONS.zh-CN.md)
+- [MCP companion](docs/yiqiao/MCP.zh-CN.md)
+- [Agent 集成](docs/yiqiao/AGENT_INTEGRATION.zh-CN.md)
 - [迁移指南](docs/yiqiao/MIGRATION.zh-CN.md)
 - [故障排查](docs/yiqiao/TROUBLESHOOTING.zh-CN.md)
 - [许可与来源说明](docs/yiqiao/LEGAL.zh-CN.md)

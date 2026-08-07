@@ -14,7 +14,7 @@ class DocumentationLocalizationTests(unittest.TestCase):
 
     def test_coverage_manifest_is_complete_and_self_describing(self):
         inventory = docs.parse_coverage(ROOT / docs.DEFAULT_MANIFEST)
-        self.assertEqual(len(inventory.entries), 26)
+        self.assertEqual(len(inventory.entries), 28)
         by_source = {entry.source: entry for entry in inventory.entries}
         self.assertEqual(by_source["README.md"].target, "README.zh-CN.md")
         self.assertEqual(

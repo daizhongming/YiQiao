@@ -5,6 +5,14 @@ PNPM ?= pnpm
 DOCKER ?= docker
 
 DASHBOARD_DIR := server/dashboard
+MCP_DIR := yiqiao-mcp
+MCP_SUPPORT_PATHS := scripts/mcp_contract_smoke.py tests/test_mcp_contract_smoke.py tests/test_full_stack_smoke_mcp.py
+MCP_VENV ?= .venv-mcp
+ifeq ($(OS),Windows_NT)
+MCP_PYTHON := $(MCP_VENV)/Scripts/python.exe
+else
+MCP_PYTHON := $(MCP_VENV)/bin/python
+endif
 COMPOSE_DIR := server
 COMPOSE := $(DOCKER) compose
 BASE_COMPOSE := $(COMPOSE) -f docker-compose.yaml
@@ -16,19 +24,20 @@ COMPOSE_CONFIG_PUBLIC_ORIGIN ?= https://dashboard.example.invalid
 PYTHON_PATHS := mem0 yiqiao server tests scripts
 PYTEST_ARGS ?=
 
-.PHONY: all check install install-python install-dashboard format format-check lint lint-python \
+.PHONY: all check install install-python install-dashboard install-mcp format format-check lint lint-python \
 	test test-python python-check dashboard dashboard-check dashboard-install dashboard-format \
-	dashboard-lint dashboard-typecheck dashboard-test dashboard-build init compose-config images smoke audit \
-	audit-modifications audit-python audit-dashboard docs-check secrets secrets-current secrets-history
+	dashboard-lint dashboard-typecheck dashboard-test dashboard-build mcp-check mcp-format-check mcp-lint \
+	mcp-test mcp-build init compose-config images smoke audit audit-modifications audit-python audit-mcp \
+	audit-dashboard docs-check secrets secrets-current secrets-history
 
 all: check
 
-check: docs-check python-check dashboard-check compose-config
+check: docs-check python-check mcp-check dashboard-check compose-config
 
 docs-check:
 	$(PYTHON) scripts/check_docs_localization.py
 
-install: install-python install-dashboard
+install: install-python install-mcp install-dashboard
 
 install-python:
 	$(PYTHON) -m pip install -e ".[test,dev]"
@@ -36,6 +45,12 @@ install-python:
 
 install-dashboard:
 	cd $(DASHBOARD_DIR) && $(PNPM) install --frozen-lockfile
+
+install-mcp:
+	$(PYTHON) -m venv $(MCP_VENV)
+	$(MCP_PYTHON) -m pip install --upgrade pip
+	$(MCP_PYTHON) -m pip install --editable "./$(MCP_DIR)[test]" ruff==0.16.0 build==1.3.0 twine==6.2.0
+	$(MCP_PYTHON) -m pip check
 
 format:
 	$(PYTHON) -m isort --profile black $(PYTHON_PATHS)
@@ -62,6 +77,21 @@ test-python:
 		$(PYTEST_ARGS)
 
 python-check: format-check lint-python test-python
+
+mcp-check: mcp-format-check mcp-lint mcp-test mcp-build
+
+mcp-format-check: install-mcp
+	$(MCP_PYTHON) -m ruff format --check $(MCP_DIR)/src $(MCP_DIR)/tests $(MCP_SUPPORT_PATHS)
+
+mcp-lint: install-mcp
+	$(MCP_PYTHON) -m ruff check $(MCP_DIR)/src $(MCP_DIR)/tests $(MCP_SUPPORT_PATHS)
+
+mcp-test: install-mcp
+	$(MCP_PYTHON) -m pytest -q $(MCP_DIR)/tests tests/test_mcp_contract_smoke.py tests/test_full_stack_smoke_mcp.py
+
+mcp-build: install-mcp
+	$(MCP_PYTHON) -m build --wheel $(MCP_DIR)
+	$(MCP_PYTHON) -m twine check --strict $(MCP_DIR)/dist/*
 
 dashboard: dashboard-check
 
@@ -99,13 +129,17 @@ images:
 smoke:
 	$(PYTHON) scripts/full_stack_smoke.py
 
-audit: audit-modifications audit-python audit-dashboard
+audit: audit-modifications audit-python audit-mcp audit-dashboard
 
 audit-modifications:
 	$(PYTHON) scripts/audit_modification_notices.py --fetch-base
 
 audit-python:
 	$(PYTHON) -m pip_audit --local --progress-spinner off
+
+audit-mcp: install-mcp
+	$(MCP_PYTHON) -m pip install pip-audit==2.10.1
+	$(MCP_PYTHON) -m pip_audit --progress-spinner off
 
 audit-dashboard: install-dashboard
 	cd $(DASHBOARD_DIR) && $(PNPM) audit --audit-level high

@@ -152,6 +152,29 @@ def test_modified_paths_fails_closed_for_low_similarity_move(tmp_path, monkeypat
         notices.modified_paths(repo)
 
 
+def test_modified_paths_keeps_reviewed_copy_classification_after_staging(tmp_path, monkeypatch):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "--quiet")
+    _git(repo, "config", "user.name", "YiQiao Test")
+    _git(repo, "config", "user.email", "test@example.com")
+    (repo / "source.txt").write_text("reviewed legal payload\n")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "--quiet", "-m", "base")
+    base = _git(repo, "rev-parse", "HEAD")
+
+    (repo / "reviewed-copy.txt").write_bytes((repo / "source.txt").read_bytes())
+    monkeypatch.setattr(notices, "BASE_COMMIT", base)
+    monkeypatch.setattr(notices, "YIQIAO_ORIGINATED_PATHS", frozenset({"reviewed-copy.txt"}))
+
+    assert notices.modified_paths(repo) == []
+    _git(repo, "add", "reviewed-copy.txt")
+    assert notices.modified_paths(repo) == []
+    (repo / "source.txt").unlink()
+    _git(repo, "add", "-A")
+    assert notices.modified_paths(repo) == []
+
+
 def test_text_notice_must_be_structural(tmp_path):
     relative = Path("example.py")
     disguised = f'value = "# {NOTICE_TEXT}"\n'.encode()

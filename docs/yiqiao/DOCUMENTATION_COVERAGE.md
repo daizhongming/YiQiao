@@ -2,7 +2,7 @@
 
 [简体中文](DOCUMENTATION_COVERAGE.zh-CN.md) | **English**
 
-Last reviewed: 2026-07-27
+Last reviewed: 2026-08-05
 
 This inventory is the authoritative scope for YiQiao's public English and
 Simplified Chinese documentation. English sources remain normative. A `pass`
@@ -35,6 +35,8 @@ Kinds and policies:
 | `docs/yiqiao/README.md` | `docs/yiqiao/README.zh-CN.md` | `markdown` | `required` | `required` | `complete` | `pass` |
 | `docs/yiqiao/LEGAL.md` | `docs/yiqiao/LEGAL.zh-CN.md` | `markdown` | `required` | `required` | `complete` | `pass` |
 | `docs/yiqiao/MIGRATION.md` | `docs/yiqiao/MIGRATION.zh-CN.md` | `markdown` | `required` | `required` | `complete` | `pass` |
+| `docs/yiqiao/MCP.md` | `docs/yiqiao/MCP.zh-CN.md` | `markdown` | `required` | `required` | `complete` | `pass` |
+| `docs/yiqiao/AGENT_INTEGRATION.md` | `docs/yiqiao/AGENT_INTEGRATION.zh-CN.md` | `markdown` | `required` | `required` | `complete` | `pass` |
 | `docs/yiqiao/OPERATIONS.md` | `docs/yiqiao/OPERATIONS.zh-CN.md` | `markdown` | `required` | `required` | `complete` | `pass` |
 | `docs/yiqiao/RELEASE_0.2.0.md` | `docs/yiqiao/RELEASE_0.2.0.zh-CN.md` | `markdown` | `required` | `required` | `complete` | `pass` |
 | `docs/yiqiao/RELEASE_0.2.1.md` | `docs/yiqiao/RELEASE_0.2.1.zh-CN.md` | `markdown` | `required` | `required` | `complete` | `pass` |
@@ -59,6 +61,8 @@ paths are checked for existence; patterns define durable scanner boundaries.
 | `.github/ISSUE_TEMPLATE/config.yml` | GitHub supports one reserved chooser configuration; its visible text is bilingual inline. |
 | `server/dashboard/public/fonts/OFL-1.1.txt` | Unchanged third-party SIL OFL text must remain verbatim. |
 | `server/dashboard/.env.example` | Dashboard build-time template; operator configuration is documented in the paired server environment template. |
+| `yiqiao-mcp/MODIFICATIONS.md` | Byte-for-byte legal payload copy shipped with the companion distribution; the repository-root English/Chinese pair is authoritative. |
+| `yiqiao-mcp/THIRD_PARTY_NOTICES.md` | Byte-for-byte legal payload copy shipped with the companion distribution; the repository-root English/Chinese pair is authoritative. |
 | `server/requirements.txt` | Machine-consumed dependency manifest. |
 | `server/dashboard/pnpm-lock.yaml` | Generated dependency lockfile. |
 | `.github/workflows/**` | CI configuration rather than user documentation. |

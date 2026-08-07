@@ -401,6 +401,7 @@ def get_workspace_settings(
     user: User | None = Depends(verify_auth),
     db: Session = Depends(get_db),
 ):
+    _deny_project_api_key_control_plane(request)
     settings = get_json(db, WORKSPACE_KEY, DEFAULT_WORKSPACE_SETTINGS)
     return visible_workspace(settings, user.email if user else None, _is_global_admin(request, user))
 
@@ -507,6 +508,7 @@ def delete_workspace_member(
     user: User | None = Depends(verify_auth),
     db: Session = Depends(get_db),
 ):
+    _deny_project_api_key_control_plane(request)
     if user and str(user.email).lower() == str(email).lower():
         raise HTTPException(status_code=400, detail="You cannot remove your own active workspace membership.")
     current = get_json(db, WORKSPACE_KEY, DEFAULT_WORKSPACE_SETTINGS)
@@ -532,6 +534,7 @@ def list_organizations(
     user: User | None = Depends(verify_auth),
     db: Session = Depends(get_db),
 ):
+    _deny_project_api_key_control_plane(request)
     current = get_json(db, WORKSPACE_KEY, DEFAULT_WORKSPACE_SETTINGS)
     workspace = visible_workspace(current, user.email if user else None, _is_global_admin(request, user))
     return workspace.get("organizations", [])
@@ -707,6 +710,7 @@ def remove_org_member(
     user: User | None = Depends(verify_auth),
     db: Session = Depends(get_db),
 ):
+    _deny_project_api_key_control_plane(request)
     email = body.get("email")
     if not email:
         raise HTTPException(status_code=400, detail="email is required.")
@@ -911,6 +915,7 @@ def delete_project_member(
     user: User | None = Depends(verify_auth),
     db: Session = Depends(get_db),
 ):
+    _deny_project_api_key_control_plane(request)
     if user and str(user.email).lower() == str(email).lower():
         raise HTTPException(status_code=400, detail="You cannot remove your own active project membership.")
     current = get_json(db, WORKSPACE_KEY, DEFAULT_WORKSPACE_SETTINGS)

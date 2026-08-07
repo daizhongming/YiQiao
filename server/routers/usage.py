@@ -61,9 +61,15 @@ def _is_global_admin(request: Request, user: User | None) -> bool:
     )
 
 
+def _deny_project_api_key_control_plane(request: Request) -> None:
+    if getattr(request.state, "auth_type", "none") == "api_key":
+        raise HTTPException(status_code=403, detail="Project API keys cannot access usage settings.")
+
+
 def _project_access(
     settings: dict[str, Any], project_id: str, request: Request, user: User | None, *, write: bool
 ) -> None:
+    _deny_project_api_key_control_plane(request)
     if _is_global_admin(request, user):
         return
     role = member_role(settings, user.email if user else None, project_id)
@@ -75,6 +81,7 @@ def _project_access(
 def _organization_access(
     settings: dict[str, Any], org_id: str, request: Request, user: User | None, *, write: bool
 ) -> None:
+    _deny_project_api_key_control_plane(request)
     if _is_global_admin(request, user):
         return
     role = (
@@ -387,6 +394,10 @@ def usage_summary(
     )
     resolved_project_id = project_id or active_project_id
     resolved_scope_id = scope_id or (active_org_id if scope_type == "organization" else resolved_project_id)
+    if scope_type == "project":
+        if resolved_scope_id != resolved_project_id:
+            raise HTTPException(status_code=404, detail="Project not found.")
+        resolved_scope_id = resolved_project_id
     if scope_type == "organization":
         _organization_access(settings, resolved_scope_id, request, user, write=False)
     else:

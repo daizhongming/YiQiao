@@ -44,3 +44,11 @@ services:
       options:
         max-file: "5"
         max-size: 10m
+
+  yiqiao-mcp:
+    pull_policy: always
+    logging:
+      driver: json-file
+      options:
+        max-file: "5"
+        max-size: 10m
