@@ -132,6 +132,7 @@ server/dashboard/src/app/(root)/dashboard/entities/[type]/[id]/page.tsx
 server/dashboard/src/app/(root)/dashboard/graph/galaxy-graph.tsx
 server/dashboard/src/app/(root)/dashboard/graph/page.tsx
 server/dashboard/src/app/(root)/dashboard/install/page.tsx
+server/dashboard/src/app/(root)/dashboard/install/mcp-config.ts
 server/dashboard/src/app/(root)/dashboard/memories/memory-import-dialog.tsx
 server/dashboard/src/app/(root)/dashboard/memory-exports/page.tsx
 server/dashboard/src/app/(root)/dashboard/page.tsx

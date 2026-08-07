@@ -711,14 +711,67 @@ const translations: Record<string, string> = {
   "YiQiao SDK": "YiQiao SDK",
   "Use the Python SDK in your application.": "在你的应用中使用 Python SDK。",
   "API Reference": "接口文档",
+  "MCP Guide": "MCP 指南",
+  "Integration type": "集成类型",
+  "Connect YiQiao to applications and agent clients.":
+    "将 YiQiao 连接到应用和智能体客户端。",
+  "Python SDK": "Python SDK",
+  "MCP Agents": "MCP 智能体",
+  "SDK mode": "SDK 模式",
   Synchronous: "同步",
   Asynchronous: "异步",
   "Step 1: Install the SDK": "第 1 步：安装 SDK",
   "Install the published YiQiao package from PyPI.":
     "从 PyPI 安装已发布的 YiQiao 软件包。",
+  "Copy install command": "复制安装命令",
   "Step 2: Add and search memories": "第 2 步：添加并检索记忆",
   "The SDK reads provider credentials such as OPENAI_API_KEY from your environment.":
     "SDK 会从环境变量中读取 OPENAI_API_KEY 等模型服务商凭据。",
+  "Copy SDK example": "复制 SDK 示例",
+  "YiQiao MCP": "YiQiao MCP",
+  "Connect coding agents and agent runtimes through the Model Context Protocol.":
+    "通过模型上下文协议连接编程智能体和智能体运行时。",
+  "Streamable HTTP": "Streamable HTTP",
+  "Memory profile": "记忆配置档",
+  "Project-scoped key": "项目级密钥",
+  "Step 1: Start the MCP service": "第 1 步：启动 MCP 服务",
+  "Start the Streamable HTTP companion from the YiQiao repository.":
+    "从 YiQiao 仓库启动 Streamable HTTP 配套服务。",
+  "Copy start command": "复制启动命令",
+  "Step 2: Create a project API key": "第 2 步：创建项目 API 密钥",
+  "Create a scoped project key, then expose it as YIQIAO_API_KEY to the client process.":
+    "创建限定权限的项目密钥，并以 YIQIAO_API_KEY 提供给客户端进程。",
+  "Use memory:read and memory:write for the default memory profile.":
+    "默认记忆配置档需要 memory:read 和 memory:write 权限。",
+  "Open API Keys": "打开 API 密钥",
+  "Step 3: Connect your client": "第 3 步：连接客户端",
+  "Change the endpoint if the agent runs on another host or network.":
+    "如果智能体运行在其他主机或网络，请修改端点。",
+  "MCP endpoint": "MCP 端点",
+  "Copy MCP endpoint": "复制 MCP 端点",
+  "MCP client": "MCP 客户端",
+  "Add YiQiao to the Codex MCP server configuration.":
+    "将 YiQiao 添加到 Codex MCP 服务器配置。",
+  "Add YiQiao to your Claude Code project configuration.":
+    "将 YiQiao 添加到 Claude Code 项目配置。",
+  "Register YiQiao in OpenClaw's standard MCP registry.":
+    "在 OpenClaw 标准 MCP 注册表中注册 YiQiao。",
+  "Add YiQiao to the Hermes MCP server list.":
+    "将 YiQiao 添加到 Hermes MCP 服务器列表。",
+  "Merge into configuration": "合并到配置",
+  "Merge the YiQiao entry with existing settings; do not replace the whole file.":
+    "请将 YiQiao 条目合并到现有设置中，不要替换整个文件。",
+  "Run openclaw config file to print the active path.":
+    "运行 openclaw config file 查看当前生效的配置路径。",
+  "Enter an absolute HTTP(S) URL without credentials, query parameters, or a fragment. Configurations keep the last valid endpoint.":
+    "请输入不含凭据、查询参数或片段的绝对 HTTP(S) URL。配置将保留上一个有效端点。",
+  "Copy client configuration": "复制客户端配置",
+  "Verify connection": "验证连接",
+  "Copy verification command": "复制验证命令",
+  "This uses OpenClaw's standard MCP registry, not a native plugin or OAuth flow.":
+    "此方式使用 OpenClaw 标准 MCP 注册表，并非原生插件或 OAuth 流程。",
+  "Keep project keys in environment or secret storage, never in committed configuration.":
+    "请将项目密钥保存在环境变量或密钥存储中，切勿写入提交的配置。",
   "Agent Harness": "智能体框架",
   "Memory across every session": "跨会话保留记忆",
   Integrations: "集成",
@@ -1063,6 +1116,7 @@ const translations: Record<string, string> = {
   Loading: "加载中",
   "Loading...": "加载中...",
   Copied: "已复制",
+  "Copy failed": "复制失败",
   Copy: "复制",
   "Copy code": "复制代码",
   Delete: "删除",
