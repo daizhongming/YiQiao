@@ -23,7 +23,8 @@ RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
       --fetch-retries=5 \
       --fetch-retry-mintimeout=2000 \
       --fetch-retry-maxtimeout=30000
-RUN set -eu; \
+RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
+    set -eu; \
     mkdir -p /licenses/npm/packages; \
     find node_modules/.pnpm -type f \
       \( -iname 'license*' -o -iname 'licence*' -o -iname 'notice*' -o -iname 'copying*' -o -name package.json \) \
