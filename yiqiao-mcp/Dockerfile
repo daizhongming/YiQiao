@@ -5,6 +5,7 @@ WORKDIR /src
 ARG PIP_INDEX_URL=https://pypi.org/simple
 
 COPY yiqiao-mcp/pyproject.toml ./
+COPY yiqiao-mcp/LICENSE yiqiao-mcp/NOTICE yiqiao-mcp/THIRD_PARTY_NOTICES.md yiqiao-mcp/MODIFICATIONS.md ./
 COPY yiqiao-mcp/src ./src
 
 RUN python -m pip wheel --no-cache-dir --wheel-dir /wheels .

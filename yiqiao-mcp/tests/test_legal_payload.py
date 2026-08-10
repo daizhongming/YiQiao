@@ -20,5 +20,9 @@ def test_companion_distribution_and_image_include_legal_files() -> None:
     assert set(project["license-files"]) == set(LEGAL_FILES)
 
     dockerfile = (MCP_ROOT / "Dockerfile").read_text(encoding="utf-8")
+    builder_copy = (
+        "COPY yiqiao-mcp/LICENSE yiqiao-mcp/NOTICE yiqiao-mcp/THIRD_PARTY_NOTICES.md yiqiao-mcp/MODIFICATIONS.md ./"
+    )
+    assert builder_copy in dockerfile
     copy_instruction = "COPY LICENSE NOTICE THIRD_PARTY_NOTICES.md MODIFICATIONS.md /usr/share/licenses/yiqiao/"
     assert copy_instruction in dockerfile
