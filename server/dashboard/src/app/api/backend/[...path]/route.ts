@@ -26,8 +26,12 @@ type RouteContext = {
 async function proxyToBackend(request: NextRequest, context: RouteContext) {
   const { path } = await context.params;
   const baseUrl = getServerApiUrl().replace(/\/$/, "");
+  // FastAPI's control-plane routes intentionally disable slash redirects. The
+  // catch-all route params omit a request's trailing slash, so retain it when
+  // constructing the upstream URL or POST/PATCH routes return 404.
+  const trailingSlash = request.nextUrl.pathname.endsWith("/") ? "/" : "";
   const target = new URL(
-    `${baseUrl}/${path.map(encodeURIComponent).join("/")}`,
+    `${baseUrl}/${path.map(encodeURIComponent).join("/")}${trailingSlash}`,
   );
   target.search = request.nextUrl.search;
 
