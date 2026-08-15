@@ -16,7 +16,7 @@ on:
       version:
         description: Version tag for the published images
         required: true
-        default: v0.2.2
+        default: v1.0.0
         type: string
 
 permissions:

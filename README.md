@@ -228,8 +228,8 @@ persistence, backup, upgrade, source builds, and removal.
   features. Plan a maintenance window for graph-volume snapshots.
 - Provider behavior, privacy, rate limits, and data residency remain the
   operator's responsibility.
-- Version `0.1.x` is an initial open-source product line; deployment and API
-  compatibility should be reviewed before each upgrade.
+- Version `1.0.x` is the first stable compatibility line. Review the migration
+  notes before upgrades that change the major version.
 
 Current roadmap priorities are reproducible image provenance and SBOMs,
 documented external database deployments, stronger backup automation, and a

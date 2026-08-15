@@ -1,12 +1,14 @@
 # This file was modified in 2026 by YiQiao contributors. See NOTICE.
 
-.PHONY: init config up up-build up-production down clean logs seed wait-api wait-dashboard bootstrap health build run_local reset-admin-password prune-logs
+.PHONY: init config up up-build up-production down clean logs seed wait-api wait-dashboard wait-mcp bootstrap health build run_local reset-admin-password prune-logs
 
 OUTPUT ?= text
 API_PORT ?= 8888
 DASHBOARD_PORT ?= 3000
+MCP_PORT ?= 8765
 API_URL ?= http://localhost:$(API_PORT)
 DASHBOARD_URL ?= http://localhost:$(DASHBOARD_PORT)
+MCP_URL ?= http://localhost:$(MCP_PORT)
 COMPOSE = docker compose
 SOURCE_COMPOSE = $(COMPOSE) -f docker-compose.yaml -f docker-compose.build.yaml
 PRODUCTION_COMPOSE = $(COMPOSE) -f docker-compose.yaml -f docker-compose.production.yaml
@@ -24,20 +26,24 @@ up: config
 	$(COMPOSE) up -d
 	@$(MAKE) --no-print-directory wait-api
 	@$(MAKE) --no-print-directory wait-dashboard
+	@$(MAKE) --no-print-directory wait-mcp
 	@echo ""
 	@echo "Stack is ready."
 	@echo "  Dashboard:  $(DASHBOARD_URL)"
 	@echo "  API:        $(API_URL)"
+	@echo "  MCP:        $(MCP_URL)/mcp"
 
 up-build: config
 	$(SOURCE_COMPOSE) up -d --build
 	@$(MAKE) --no-print-directory wait-api
 	@$(MAKE) --no-print-directory wait-dashboard
+	@$(MAKE) --no-print-directory wait-mcp
 
 up-production: config
 	$(PRODUCTION_COMPOSE) up -d
 	@$(MAKE) --no-print-directory wait-api
 	@$(MAKE) --no-print-directory wait-dashboard
+	@$(MAKE) --no-print-directory wait-mcp
 
 down:
 	$(COMPOSE) down
@@ -75,11 +81,24 @@ wait-dashboard:
 		sleep 2; \
 	done
 
+wait-mcp:
+	@echo "Waiting for MCP at $(MCP_URL)/healthz..."
+	@attempt=0; until curl -fsS "$(MCP_URL)/healthz" >/dev/null 2>&1; do \
+		attempt=$$((attempt + 1)); \
+		if [ $$attempt -ge 60 ]; then \
+			echo "error: MCP did not become healthy within 120 seconds"; \
+			$(COMPOSE) ps; \
+			exit 1; \
+		fi; \
+		sleep 2; \
+	done
+
 bootstrap: up seed
 
 health:
 	@echo "API:       $$(curl -s -o /dev/null -w '%{http_code}' "$(API_URL)/api/health")"
 	@echo "Dashboard: $$(curl -s -o /dev/null -w '%{http_code}' "$(DASHBOARD_URL)/api/health")"
+	@echo "MCP:       $$(curl -s -o /dev/null -w '%{http_code}' "$(MCP_URL)/healthz")"
 	@echo "Postgres:  $$(docker compose exec -T postgres pg_isready -q && echo 'ok' || echo 'down')"
 	@echo "Neo4j:     $$(docker compose exec -T neo4j sh -c 'cypher-shell -u \"$${NEO4J_USERNAME:-neo4j}\" -p \"$${NEO4J_AUTH#*/}\" \"RETURN 1\"' >/dev/null 2>&1 && echo 'ok' || echo 'down')"
 

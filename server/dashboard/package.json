@@ -1,7 +1,7 @@
 {
   "_yiqiaoModificationNotice": "This file was modified in 2026 by YiQiao contributors. See NOTICE.",
   "name": "yiqiao-dashboard",
-  "version": "0.2.2",
+  "version": "1.0.0",
   "description": "YiQiao 自托管运维仪表盘 | Self-hosted operations dashboard for YiQiao",
   "private": true,
   "author": "YiQiao Contributors",

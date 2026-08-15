@@ -1,5 +1,6 @@
 # YiQiao Documentation
 
+- [YiQiao 1.0.0 release notes](RELEASE_1.0.0.md)
 - [YiQiao 0.2.1 release notes](RELEASE_0.2.1.md)
 - [YiQiao 0.2.0 release notes](RELEASE_0.2.0.md)
 

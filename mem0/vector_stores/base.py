@@ -2,6 +2,11 @@ from abc import ABC, abstractmethod
 
 
 class VectorStoreBase(ABC):
+    # Stores that keep payloads searchable without a vector may opt into the
+    # provider-outage write fallback. Stores with mandatory vectors retain the
+    # default ``False`` and continue to surface embedding errors.
+    supports_lexical_only_records = False
+
     @abstractmethod
     def create_col(self, name, vector_size, distance):
         """Create a new collection."""

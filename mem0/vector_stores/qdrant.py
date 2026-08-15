@@ -29,6 +29,11 @@ logger = logging.getLogger(__name__)
 
 
 class Qdrant(VectorStoreBase):
+    # Qdrant requires every point in this collection to carry the configured
+    # dense vector. During an embedding outage we store a zero placeholder and
+    # exclude it from dense queries; payload and BM25 retrieval remain usable.
+    supports_lexical_only_records = True
+
     def __init__(
         self,
         collection_name: str,
@@ -173,7 +178,16 @@ class Qdrant(VectorStoreBase):
             logger.debug("Skipping payload index creation for local Qdrant (not supported)")
             return
 
-        common_fields = ["user_id", "agent_id", "app_id", "run_id", "actor_id", "project_id", "hash"]
+        common_fields = [
+            "user_id",
+            "agent_id",
+            "app_id",
+            "run_id",
+            "actor_id",
+            "project_id",
+            "hash",
+            "embedding_status",
+        ]
 
         for field in common_fields:
             try:
@@ -234,10 +248,13 @@ class Qdrant(VectorStoreBase):
 
         points = []
         for idx, vector in enumerate(vectors):
-            payload = payloads[idx] if payloads else {}
+            payload = dict(payloads[idx]) if payloads else {}
             point_id = idx if ids is None else ids[idx]
 
             # Build named vectors: dense + optional BM25 sparse (only if collection has the slot).
+            if vector is None:
+                payload.setdefault("embedding_status", "pending")
+                vector = [0.0] * self.embedding_model_dims
             named_vectors = {"": vector}
             if self._has_bm25_slot and bm25_sparse_vectors[idx] is not None:
                 named_vectors["bm25"] = bm25_sparse_vectors[idx]
@@ -245,6 +262,18 @@ class Qdrant(VectorStoreBase):
             points.append(PointStruct(id=point_id, vector=named_vectors, payload=payload))
 
         self.client.upsert(collection_name=self.collection_name, points=points)
+
+    def _dense_query_filter(self, filters: dict = None) -> Filter:
+        """Build a dense-search filter that rejects lexical-only placeholders."""
+        query_filter = self._create_filter(filters) if filters else None
+        pending_condition = FieldCondition(
+            key="embedding_status",
+            match=MatchValue(value="pending"),
+        )
+        if query_filter is None:
+            return Filter(must_not=[pending_condition])
+        query_filter.must_not = [*(query_filter.must_not or []), pending_condition]
+        return query_filter
 
     # ISO 8601 datetime pattern for detecting datetime strings in range filters
     _ISO_DATETIME_RE = re.compile(
@@ -416,7 +445,7 @@ class Qdrant(VectorStoreBase):
         Returns:
             list: Search results.
         """
-        query_filter = self._create_filter(filters) if filters else None
+        query_filter = self._dense_query_filter(filters)
         hits = self.client.query_points(
             collection_name=self.collection_name,
             query=vectors,
@@ -427,7 +456,7 @@ class Qdrant(VectorStoreBase):
 
     def search_batch(self, queries: list, vectors_list: list, top_k: int = 1, filters: dict = None):
         """Batch search using Qdrant's query_batch_points for efficiency."""
-        query_filter = self._create_filter(filters) if filters else None
+        query_filter = self._dense_query_filter(filters)
         requests = [
             models.QueryRequest(query=vec, filter=query_filter, limit=top_k, with_payload=True) for vec in vectors_list
         ]
@@ -496,7 +525,20 @@ class Qdrant(VectorStoreBase):
             vector (list, optional): Updated vector. Defaults to None.
             payload (dict, optional): Updated payload. Defaults to None.
         """
-        if vector is not None and payload is not None:
+        if vector is None and payload is not None and payload.get("embedding_status") == "pending":
+            # A text update can still succeed while the embedding provider is
+            # unavailable. Replace the old dense vector so stale semantics do
+            # not rank the new text, and refresh BM25 from the new payload.
+            named_vectors = {"": [0.0] * self.embedding_model_dims}
+            if self._has_bm25_slot:
+                text_for_bm25 = payload.get("text_lemmatized") or payload.get("data", "")
+                if text_for_bm25:
+                    sparse = self._encode_bm25(text_for_bm25)
+                    if sparse is not None:
+                        named_vectors["bm25"] = sparse
+            point = PointStruct(id=vector_id, vector=named_vectors, payload=payload)
+            self.client.upsert(collection_name=self.collection_name, points=[point])
+        elif vector is not None and payload is not None:
             # Full update: attach BM25 sparse vector alongside dense vector (only if slot exists).
             named_vectors = {"": vector}
             if self._has_bm25_slot:

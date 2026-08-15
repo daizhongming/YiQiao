@@ -188,12 +188,14 @@ class TestQdrant(unittest.TestCase):
 
         results = self.qdrant.search(query="", vectors=vectors, top_k=1)
 
-        self.client_mock.query_points.assert_called_once_with(
-            collection_name="test_collection",
-            query=vectors,
-            query_filter=None,
-            limit=1,
-        )
+        self.client_mock.query_points.assert_called_once()
+        call_args = self.client_mock.query_points.call_args[1]
+        self.assertEqual(call_args["collection_name"], "test_collection")
+        self.assertEqual(call_args["query"], vectors)
+        self.assertEqual(call_args["limit"], 1)
+        self.assertIsInstance(call_args["query_filter"], Filter)
+        self.assertEqual(call_args["query_filter"].must_not[0].key, "embedding_status")
+        self.assertEqual(call_args["query_filter"].must_not[0].match.value, "pending")
 
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0].payload, {"key": "value"})
@@ -254,7 +256,9 @@ class TestQdrant(unittest.TestCase):
         results = self.qdrant.search(query="", vectors=vectors, top_k=1, filters=None)
 
         call_args = self.client_mock.query_points.call_args[1]
-        self.assertIsNone(call_args["query_filter"])
+        self.assertIsInstance(call_args["query_filter"], Filter)
+        self.assertEqual(call_args["query_filter"].must_not[0].key, "embedding_status")
+        self.assertEqual(call_args["query_filter"].must_not[0].match.value, "pending")
 
         self.assertEqual(len(results), 1)
 

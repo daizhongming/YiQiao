@@ -33,9 +33,9 @@
 5. 捕获消息不得包含召回块、工具结果 wrapper、隐藏 prompt、工具调用记录
    或凭据。
 
-add 工具只接受 `user` 和 `assistant` role。需要确定性原文捕获时设置
-`infer=false`；只有在希望已配置的 YiQiao provider 从原始 turn 提取长期
-事实时才启用 inference。
+add 工具只接受 `user` 和 `assistant` role，并默认使用 `infer=false` 进行
+确定性原文捕获；只有在希望已配置的 YiQiao provider 从原始 turn 提取长期
+事实时才显式设置 `infer=true`。
 
 ## Hermes Write-Search-Read Smoke
 

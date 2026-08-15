@@ -957,6 +957,21 @@ class TestUpdateOpenAPISchema:
 
 
 # ===========================================================================
+# GetMemory: missing records must not look like successful null responses
+# ===========================================================================
+
+
+class TestGetMemory:
+    def test_missing_memory_returns_404(self, client, mock_memory):
+        mock_memory.get.return_value = None
+
+        response = client.get("/memories/00000000-0000-4000-8000-000000000001")
+
+        assert response.status_code == 404
+        assert response.json()["detail"] == "Memory not found."
+
+
+# ===========================================================================
 # GetMemories: Entity parameters to filters mapping (fix for #4955)
 # ===========================================================================
 

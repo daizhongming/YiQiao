@@ -41,6 +41,11 @@ def test_all_tool_schemas_are_closed_and_have_no_project_selector():
         assert "project_id" not in tool.inputSchema["properties"]
 
 
+def test_memory_add_defaults_to_deterministic_raw_capture():
+    add_tool = next(tool for tool in tools_for_profile(ToolProfile.MEMORY) if tool.name == "yiqiao_memory_add")
+    assert add_tool.inputSchema["properties"]["infer"]["default"] is False
+
+
 @pytest.mark.parametrize(
     "tool_name,arguments",
     [

@@ -157,6 +157,60 @@ URL 和模型标识。处理生产数据前，请先使用页面中的连接测�
 容器启动不依赖服务商凭据。在配置的路由可用前，记忆提取、嵌入、重排和导入操作
 都会失败。
 
+## 可选的本地服务商覆盖层
+
+仓库包含一个面向 DashScope 兼容嵌入端点的可选 Compose 覆盖层。它只用于本地网络，
+不会自动加载到默认部署中。请在 `server/.env` 中设置 `EMBEDDING_API_KEY`，审查代理
+设置，并不要将该覆盖层直接用于公网部署：
+
+```bash
+cd server
+docker compose \
+  -f docker-compose.yaml \
+  -f docker-compose.local-provider.yaml \
+  up -d
+```
+
+覆盖层支持通过 `YIQIAO_RUNTIME_HTTP_PROXY` 指定代理；未指定时会使用开发环境的本地
+Docker 主机代理。换用其他服务商前，请修改端点、模型、维度和代理设置。
+
+## 为已有记忆重新生成嵌入
+
+`server/scripts/reembed_memories.py` 用于将 PGVector 中的已有记忆迁移到新的嵌入模型或
+维度兼容的端点。该功能必须显式启用：先执行 dry-run，完整备份数据库，并安排维护窗口，
+避免并发写入与迁移互相覆盖。
+
+先对项目执行 dry-run；此模式不会调用服务商：
+
+```bash
+cd server
+docker compose exec yiqiao python scripts/reembed_memories.py \
+  --project-id default-project --limit 0
+```
+
+确认结果后按批次执行。命令会写入仅所有者可读的 JSONL 备份；如果向量在扫描后发生
+变化，该批次会失败而不会静默覆盖：
+
+```bash
+cd server
+docker compose exec yiqiao python scripts/reembed_memories.py \
+  --project-id default-project --batch-size 50 --limit 1000 --apply
+```
+
+请检查 JSON 摘要和备份。要预览或执行回滚，请显式传入备份路径；回滚写入前会检查
+PGVector 集合和向量维度：
+
+```bash
+cd server
+docker compose exec yiqiao python scripts/reembed_memories.py \
+  --rollback /app/history/reembed-backups/reembed-<timestamp>.jsonl
+docker compose exec yiqiao python scripts/reembed_memories.py \
+  --rollback /app/history/reembed-backups/reembed-<timestamp>.jsonl --apply
+```
+
+工具不会修改 payload 或记忆历史。服务商凭据和失败详情不会写入 JSON 摘要；请将备份
+和失败清单按敏感运维数据保护。
+
 ## 持久化
 
 | 位置 | 内容 | 生命周期 |

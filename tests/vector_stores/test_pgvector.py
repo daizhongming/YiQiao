@@ -1419,11 +1419,11 @@ class TestPGVector(unittest.TestCase):
         # Verify the _get_cursor context manager was called
         mock_get_cursor.assert_called()
 
-        # Verify search query was executed without WHERE clause
+        # Semantic search excludes lexical-only rows with a NULL vector.
         search_calls = [
             call
             for call in self.mock_cursor.execute.call_args_list
-            if "SELECT id, vector <=" in str(call) and "WHERE" not in str(call)
+            if "SELECT id, vector <=" in str(call) and "WHERE vector IS NOT NULL" in str(call)
         ]
         self.assertTrue(len(search_calls) > 0)
 
@@ -1471,11 +1471,11 @@ class TestPGVector(unittest.TestCase):
         # Verify the _get_cursor context manager was called
         mock_get_cursor.assert_called()
 
-        # Verify search query was executed without WHERE clause
+        # Semantic search excludes lexical-only rows with a NULL vector.
         search_calls = [
             call
             for call in self.mock_cursor.execute.call_args_list
-            if "SELECT id, vector <=" in str(call) and "WHERE" not in str(call)
+            if "SELECT id, vector <=" in str(call) and "WHERE vector IS NOT NULL" in str(call)
         ]
         self.assertTrue(len(search_calls) > 0)
 

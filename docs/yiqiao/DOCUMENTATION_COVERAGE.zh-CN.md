@@ -33,6 +33,7 @@
 | `docs/yiqiao/MCP.md` | `docs/yiqiao/MCP.zh-CN.md` | `markdown` | `required` | `required` | `complete` | `pass` |
 | `docs/yiqiao/AGENT_INTEGRATION.md` | `docs/yiqiao/AGENT_INTEGRATION.zh-CN.md` | `markdown` | `required` | `required` | `complete` | `pass` |
 | `docs/yiqiao/OPERATIONS.md` | `docs/yiqiao/OPERATIONS.zh-CN.md` | `markdown` | `required` | `required` | `complete` | `pass` |
+| `docs/yiqiao/RELEASE_1.0.0.md` | `docs/yiqiao/RELEASE_1.0.0.zh-CN.md` | `markdown` | `required` | `required` | `complete` | `pass` |
 | `docs/yiqiao/RELEASE_0.2.0.md` | `docs/yiqiao/RELEASE_0.2.0.zh-CN.md` | `markdown` | `required` | `required` | `complete` | `pass` |
 | `docs/yiqiao/RELEASE_0.2.1.md` | `docs/yiqiao/RELEASE_0.2.1.zh-CN.md` | `markdown` | `required` | `required` | `complete` | `pass` |
 | `docs/yiqiao/SECURITY_AUDIT.md` | `docs/yiqiao/SECURITY_AUDIT.zh-CN.md` | `markdown` | `required` | `required` | `complete` | `pass` |

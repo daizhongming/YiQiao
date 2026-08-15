@@ -35,9 +35,9 @@ For each model turn:
 5. Never include the recalled block, tool result wrapper, hidden prompt,
    tool-call transcript, or credentials in the captured messages.
 
-The add tool accepts only `user` and `assistant` roles. For deterministic
-verbatim capture, set `infer=false`; enable inference only when the configured
-YiQiao provider should extract durable facts from the raw turns.
+The add tool accepts only `user` and `assistant` roles. It defaults to
+`infer=false` for deterministic verbatim capture; set `infer=true` only when
+the configured YiQiao provider should extract durable facts from the raw turns.
 
 ## Hermes Write-Search-Read Smoke
 

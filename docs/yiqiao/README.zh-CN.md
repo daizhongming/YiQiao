@@ -1,5 +1,6 @@
 # YiQiao 文档
 
+- [YiQiao 1.0.0 发布说明](RELEASE_1.0.0.zh-CN.md)
 - [YiQiao 0.2.1 发布说明](RELEASE_0.2.1.zh-CN.md)
 - [YiQiao 0.2.0 发布说明](RELEASE_0.2.0.zh-CN.md)
 

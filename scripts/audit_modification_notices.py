@@ -81,6 +81,8 @@ docs/yiqiao/RELEASE_0.2.0.md
 docs/yiqiao/RELEASE_0.2.0.zh-CN.md
 docs/yiqiao/RELEASE_0.2.1.md
 docs/yiqiao/RELEASE_0.2.1.zh-CN.md
+docs/yiqiao/RELEASE_1.0.0.md
+docs/yiqiao/RELEASE_1.0.0.zh-CN.md
 docs/yiqiao/README.md
 docs/yiqiao/README.zh-CN.md
 docs/yiqiao/SECURITY_AUDIT.md
@@ -156,6 +158,7 @@ server/dashboard/src/styles/yiqiao-theme.css
 server/dashboard/vitest.config.ts
 server/docker-compose.build.yaml
 server/docker-compose.e2e.yaml
+server/docker-compose.local-provider.yaml
 server/docker-compose.production.yaml
 server/import_quota.py
 server/import_repository.py
@@ -170,6 +173,7 @@ server/routers/settings.py
 server/routers/usage.py
 server/routers/webhooks.py
 server/settings_store.py
+server/scripts/reembed_memories.py
 server/usage_service.py
 server/webhook_dispatcher.py
 server/workspace.py
@@ -199,6 +203,7 @@ tests/test_public_api.py
 tests/test_public_branding_surfaces.py
 tests/test_oauth_retirement.py
 tests/test_release_legal_payload.py
+tests/test_reembed_memories.py
 tests/test_requests_entities_routes.py
 tests/test_server_configuration.py
 tests/test_server_state.py

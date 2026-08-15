@@ -166,6 +166,66 @@ Provider credentials are not required for container startup. Memory extraction,
 embedding, reranking, and import operations fail until their configured routes
 are usable.
 
+## Optional Local Provider Override
+
+The repository includes an opt-in Compose override for a DashScope-compatible
+embedding endpoint. It is intended for local networks only and is not part of
+the default stack. Set `EMBEDDING_API_KEY` in `server/.env`, review the proxy
+settings, and keep the override out of public deployments:
+
+```bash
+cd server
+docker compose \
+  -f docker-compose.yaml \
+  -f docker-compose.local-provider.yaml \
+  up -d
+```
+
+The override uses `YIQIAO_RUNTIME_HTTP_PROXY` when provided and otherwise points
+at the local Docker host proxy used by the development environment. Change the
+endpoint, model, dimensions, and proxy before using it with another provider.
+
+## Re-embed Existing Memories
+
+`server/scripts/reembed_memories.py` supports PGVector installations that need
+to move existing memories to a new embedding model or dimension-compatible
+endpoint. It is deliberately opt-in: run a dry-run first, keep a complete
+database backup, and schedule a maintenance window so concurrent writes do not
+race the migration.
+
+Dry-run a project without contacting the provider:
+
+```bash
+cd server
+docker compose exec yiqiao python scripts/reembed_memories.py \
+  --project-id default-project --limit 0
+```
+
+Apply in bounded batches. The command writes an owner-readable JSONL backup and
+fails a batch if a vector changed after it was scanned:
+
+```bash
+cd server
+docker compose exec yiqiao python scripts/reembed_memories.py \
+  --project-id default-project --batch-size 50 --limit 1000 --apply
+```
+
+Review the JSON summary and backup before proceeding. To dry-run or apply a
+rollback, pass the backup explicitly; rollback checks the PGVector collection
+and vector dimensions before writing:
+
+```bash
+cd server
+docker compose exec yiqiao python scripts/reembed_memories.py \
+  --rollback /app/history/reembed-backups/reembed-<timestamp>.jsonl
+docker compose exec yiqiao python scripts/reembed_memories.py \
+  --rollback /app/history/reembed-backups/reembed-<timestamp>.jsonl --apply
+```
+
+The tool never changes payloads or memory history. Provider credentials and
+failure details stay out of JSON summaries; protect the backup and any failure
+manifest as sensitive operational data.
+
 ## Persistence
 
 | Location                     | Contents                                                                                                   | Lifecycle                                               |
