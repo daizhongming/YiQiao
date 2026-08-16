@@ -214,6 +214,7 @@ tests/test_verify_chat_import_consistency.py
 tests/test_webhooks_router.py
 tests/test_workspace_rbac.py
 tests/vector_stores/test_pgvector_import_queries.py
+tests/vector_stores/test_qdrant_lexical_fallback.py
 THIRD_PARTY_NOTICES.md
 yiqiao-mcp/Dockerfile
 yiqiao-mcp/LICENSE

@@ -1,3 +1,5 @@
+# This file was modified in 2026 by YiQiao contributors. See NOTICE.
+
 from abc import ABC, abstractmethod
 
 
