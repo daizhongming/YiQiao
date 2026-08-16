@@ -46,7 +46,7 @@ class YiQiaoRestClient:
             follow_redirects=False,
             trust_env=False,
             transport=transport,
-            headers={"Accept": "application/json", "User-Agent": "yiqiao-mcp/0.2.2"},
+            headers={"Accept": "application/json", "User-Agent": "yiqiao-mcp/1.0.0"},
         )
 
     async def aclose(self) -> None:

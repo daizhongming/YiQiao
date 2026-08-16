@@ -63,6 +63,25 @@ def test_mcp_service_forwards_documented_proxy_and_timeout_controls():
         assert f"      {variable}:" in mcp_service
 
 
+def test_mcp_service_has_a_healthcheck_for_the_published_endpoint():
+    compose = (full_stack_smoke.SERVER / "docker-compose.yaml").read_text(encoding="utf-8")
+    mcp_service = compose.split("  yiqiao-mcp:\n", 1)[1].split("\nvolumes:", 1)[0]
+
+    assert "    healthcheck:" in mcp_service
+    assert "http://127.0.0.1:8000/healthz" in mcp_service
+
+
+def test_make_targets_wait_for_mcp_before_reporting_ready():
+    makefile = (full_stack_smoke.SERVER / "Makefile").read_text(encoding="utf-8")
+
+    assert "MCP_URL ?= http://localhost:$(MCP_PORT)" in makefile
+    assert "wait-mcp:" in makefile
+    assert 'curl -fsS "$(MCP_URL)/healthz"' in makefile
+    for target in ("up", "up-build", "up-production"):
+        body = makefile.split(f"{target}:", 1)[1].split("\n\n", 1)[0]
+        assert "wait-mcp" in body
+
+
 def test_mcp_contract_passes_key_only_in_child_environment(monkeypatch):
     observed = {}
     api_key = "yiqiao_project_key_secret"

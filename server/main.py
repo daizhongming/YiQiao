@@ -568,7 +568,7 @@ app = FastAPI(
         "Authentication supports Bearer JWT, project API keys via `X-API-Key`, "
         "and the `ADMIN_API_KEY` environment variable."
     ),
-    version="0.2.2",
+    version="1.0.0",
     redirect_slashes=False,
 )
 app.state.limiter = limiter
@@ -3736,7 +3736,7 @@ def get_memory(request: Request, memory_id: str, _auth=Depends(require_project_r
     """Retrieve a specific memory by ID."""
     try:
         response = get_memory_instance().get(memory_id)
-        if _memory_project_id(response) != get_project_id(request):
+        if not response or _memory_project_id(response) != get_project_id(request):
             raise HTTPException(status_code=404, detail="Memory not found.")
         return response
     except HTTPException:

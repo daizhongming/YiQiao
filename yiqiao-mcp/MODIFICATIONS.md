@@ -19,13 +19,13 @@ Run `python scripts/audit_modification_notices.py` from a complete Git
 checkout to verify this list and every embedded notice. Unknown modified
 file formats fail closed.
 
-Modified upstream files: **227**
+Modified upstream files: **228**
 
-Path-list SHA-256: `3C72CB68E82D9A4C4DBA45E2BF182063651171744BA9AD60CF9A6149A133069F`
+Path-list SHA-256: `E0D0A7932848B662D947CC8766957F1BC327940605E2383287D024700E11CDE4`
 
-YiQiao-originated files: **186**
+YiQiao-originated files: **192**
 
-Originated path-list SHA-256: `DC962F35D99024FEB75B3D11064BCCD5AED55F8DDB5F47CF8314CF509216FE32`
+Originated path-list SHA-256: `E64AC86D53585275437A9F1F56972DF442525F73E60ED68785479FA6EE82ECF9`
 
 ## Files
 
@@ -97,6 +97,7 @@ Originated path-list SHA-256: `DC962F35D99024FEB75B3D11064BCCD5AED55F8DDB5F47CF8
 - `mem0/vector_stores/azure_ai_search.py` (source comment)
 - `mem0/vector_stores/azure_mysql.py` (source comment)
 - `mem0/vector_stores/baidu.py` (source comment)
+- `mem0/vector_stores/base.py` (source comment)
 - `mem0/vector_stores/cassandra.py` (source comment)
 - `mem0/vector_stores/chroma.py` (source comment)
 - `mem0/vector_stores/databricks.py` (source comment)

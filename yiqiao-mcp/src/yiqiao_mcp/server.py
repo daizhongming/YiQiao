@@ -131,7 +131,10 @@ async def _dispatch(
             for key in ("messages", "user_id", "agent_id", "app_id", "run_id", "metadata", "infer")
             if arguments.get(key) is not None
         }
-        body.setdefault("infer", True)
+        # MCP capture is deterministic by default and must remain usable when
+        # the optional extraction LLM is unavailable. Callers can explicitly
+        # request inference when their configured provider is healthy.
+        body.setdefault("infer", False)
         return await rest.request("POST", "/memories", credential, json_body=body)
     if name == "yiqiao_memory_update":
         body = {key: arguments[key] for key in ("text", "metadata") if key in arguments}

@@ -137,7 +137,7 @@ def _tool_definitions() -> dict[str, types.Tool]:
         },
         **_entity_properties(),
         "metadata": deepcopy(_METADATA_SCHEMA),
-        "infer": {"type": "boolean", "default": True},
+        "infer": {"type": "boolean", "default": False},
     }
     entity_requirement = [{"required": [name]} for name in ("user_id", "agent_id", "app_id", "run_id")]
     update_properties = {

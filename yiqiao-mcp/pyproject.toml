@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "yiqiao-mcp"
-version = "0.2.2"
+version = "1.0.0"
 description = "REST-only MCP companion for YiQiao"
 readme = { text = "YiQiao MCP companion", content-type = "text/plain" }
 license = "Apache-2.0"

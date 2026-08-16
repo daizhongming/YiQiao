@@ -102,15 +102,15 @@ test. It creates a unique Compose project and must not reuse production data.
    force-push for release publication.
 3. Require all four workflows to succeed on the exact `main` commit.
 4. Enforce the required checks on protected `main`, prohibit force-pushes and
-   deletion, then create `v0.1.1` at that exact commit. Verify the tag resolves
+   deletion, then create `v1.0.0` at that exact commit. Verify the tag resolves
    to the reviewed `main` SHA.
 5. Dispatch `YiQiao Images` from `main` with `publish=true` and
-   `version=v0.1.1`. The workflow must reject a version tag that is missing or
+   `version=v1.0.0`. The workflow must reject a version tag that is missing or
    targets another commit.
 6. Verify both GHCR packages are public and anonymously resolve `latest`,
-   `v0.1.1`, and full commit-SHA tags. Record the immutable multi-platform
+   `v1.0.0`, and full commit-SHA tags. Record the immutable multi-platform
    digest for each image.
-7. Create the bilingual GitHub Release for `v0.1.1`, including the exact source
+7. Create the bilingual GitHub Release for `v1.0.0`, including the exact source
    SHA, image tags and digests, security and upgrade guidance, Mem0 attribution,
    and Apache-2.0 licensing.
 8. Run the literal README clone, initializer, default Compose startup, health,
@@ -130,8 +130,8 @@ test. It creates a unique Compose project and must not reuse production data.
   consistent graph backup requires a maintenance window or storage snapshot.
 - Provider secrets configured in the dashboard reside in PostgreSQL. Operators
   must protect database backups, administrator sessions, and host access.
-- Version `0.1.x` is an initial open-source line; operators should review API,
-  schema, provider, and image compatibility before every upgrade.
+- Version `1.0.x` is the first stable compatibility line; operators should review
+  API, schema, provider, and image compatibility before major upgrades.
 
 ## Rollback
 

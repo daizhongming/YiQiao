@@ -310,7 +310,6 @@ async def test_destructive_profile_maps_all_tools_to_rest_contracts():
                                 "messages": [{"role": "user", "content": "raw turn"}],
                                 "user_id": "alice",
                                 "metadata": {"source": "test"},
-                                "infer": False,
                             },
                         ),
                         await session.call_tool("yiqiao_memory_get", {"memory_id": memory_id}),

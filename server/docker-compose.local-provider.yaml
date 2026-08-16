@@ -1,0 +1,14 @@
+# This file was modified in 2026 by YiQiao contributors. See NOTICE.
+# Local-only provider override. Keep credentials in the invoking environment.
+services:
+  yiqiao:
+    environment:
+      EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:?Set EMBEDDING_API_KEY in server/.env before starting YiQiao}
+      YIQIAO_EMBEDDER_BASE_URL: https://dashscope.aliyuncs.com/compatible-mode/v1
+      YIQIAO_EMBEDDER_MODEL: text-embedding-v4
+      YIQIAO_EMBEDDER_DIMS: "1024"
+      YIQIAO_EMBEDDER_ALLOWED_OPENAI_PARAMS: dimensions
+      HTTP_PROXY: ${YIQIAO_RUNTIME_HTTP_PROXY:-http://host.docker.internal:7890}
+      HTTPS_PROXY: ${YIQIAO_RUNTIME_HTTP_PROXY:-http://host.docker.internal:7890}
+      ALL_PROXY: ${YIQIAO_RUNTIME_HTTP_PROXY:-http://host.docker.internal:7890}
+      NO_PROXY: localhost,127.0.0.1,host.docker.internal,postgres,qdrant,neo4j,yiqiao

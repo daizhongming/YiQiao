@@ -1020,6 +1020,279 @@ def _payload_is_expired(payload: Optional[Dict[str, Any]]) -> bool:
         return False
 
 
+# Semantic search depends on a billable embedding request. Keep an intentionally
+# small, deterministic read-only fallback for existing memories so a temporary
+# provider outage does not turn stored facts into an empty context. The fallback
+# is especially useful for Chinese text, which PostgreSQL's simple FTS parser
+# cannot reliably tokenize.
+_LEXICAL_CJK_RUN = re.compile(r"[\u3400-\u9fff]+")
+_LEXICAL_WORD = re.compile(r"[a-z0-9][a-z0-9_+#.-]*", re.IGNORECASE)
+_LEXICAL_QUERY_NOISE = re.compile(r"[\s\u3000\u3001\u3002\uff0c\uff01\uff1f?!,:;；，。！？、]+")
+_LEXICAL_FALLBACK_SCAN_LIMIT = 100_000
+
+
+def _supports_lexical_only_records(vector_store: Any) -> bool:
+    """Return whether the store can persist payloads without an embedding."""
+
+    # Use an identity check so a permissive mock (or a store exposing arbitrary
+    # attributes) cannot accidentally opt into NULL-vector writes.
+    return getattr(vector_store, "supports_lexical_only_records", False) is True
+
+
+def _embedding_map_from_batch(texts: list[str], embeddings: Any) -> dict[str, Any]:
+    """Pair batch embeddings with text without silently dropping short batches."""
+
+    vectors = list(embeddings)
+    if len(vectors) != len(texts):
+        logger.warning(
+            "Embedding provider returned %d vectors for %d memory texts; retrying missing items individually",
+            len(vectors),
+            len(texts),
+        )
+    return {text: vector for text, vector in zip(texts, vectors) if vector is not None}
+
+
+def _mark_embedding_pending(metadata: Optional[Dict[str, Any]]) -> None:
+    if isinstance(metadata, dict):
+        metadata["embedding_status"] = "pending"
+
+
+def _lexical_terms(value: str) -> set[str]:
+    normalized = unicodedata.normalize("NFKC", value).casefold()
+    terms: set[str] = set()
+    for run in _LEXICAL_CJK_RUN.findall(normalized):
+        # Character n-grams preserve useful phrases such as "期望薪资" while
+        # ignoring one-character Chinese stop words that match almost anything.
+        for width in (2, 3, 4):
+            if len(run) >= width:
+                terms.update(run[index : index + width] for index in range(len(run) - width + 1))
+    terms.update(word for word in _LEXICAL_WORD.findall(normalized) if len(word) >= 2)
+    return terms
+
+
+def _lexical_score(query: str, text: str) -> float:
+    if not isinstance(text, str) or not text.strip():
+        return 0.0
+
+    def score_variant(variant: str) -> float:
+        normalized_query = unicodedata.normalize("NFKC", variant).casefold().strip()
+        if not normalized_query:
+            return 0.0
+        query_terms = _lexical_terms(normalized_query)
+        if not query_terms:
+            return 0.0
+        text_terms = _lexical_terms(text)
+        if not text_terms:
+            return 0.0
+        weights = {term: float(len(term) ** 2 if _LEXICAL_CJK_RUN.fullmatch(term) else 3) for term in query_terms}
+        total = sum(weights.values())
+        matched = sum(weight for term, weight in weights.items() if term in text_terms)
+        score = matched / total if total else 0.0
+
+        # A normalized exact phrase is stronger evidence than individual n-grams.
+        compact_query = _LEXICAL_QUERY_NOISE.sub("", normalized_query)
+        compact_text = _LEXICAL_QUERY_NOISE.sub("", unicodedata.normalize("NFKC", text).casefold())
+        if len(compact_query) >= 2 and compact_query in compact_text:
+            score = max(score, 0.98)
+        return min(1.0, score)
+
+    full_score = score_variant(query)
+    # YiQiao clients put the current recruiter message on the first line and
+    # append job context afterwards. Give that focused line a modest priority
+    # so a long job description cannot drown out an exact question.
+    first_line = query.splitlines()[0] if query.splitlines() else query
+    focused_score = score_variant(first_line)
+    return max(full_score, focused_score * 0.85)
+
+
+def _format_lexical_fallback_results(
+    scored_rows: list[dict[str, Any]],
+    explain: bool,
+    reason: str = "embedding_unavailable",
+) -> list[dict[str, Any]]:
+    promoted_payload_keys = [
+        "user_id",
+        "agent_id",
+        "run_id",
+        "actor_id",
+        "role",
+        "attributed_to",
+        "expiration_date",
+        "categories",
+    ]
+    core_and_promoted_keys = {
+        "data",
+        "hash",
+        "created_at",
+        "updated_at",
+        "id",
+        "text_lemmatized",
+        "attributed_to",
+        *promoted_payload_keys,
+    }
+    results: list[dict[str, Any]] = []
+    for item in scored_rows:
+        payload = item.get("payload") or {}
+        if not payload.get("data"):
+            continue
+        memory_item = MemoryItem(
+            id=item["id"],
+            memory=payload["data"],
+            hash=payload.get("hash"),
+            created_at=payload.get("created_at"),
+            updated_at=payload.get("updated_at"),
+            score=item["score"],
+        ).model_dump()
+        for key in promoted_payload_keys:
+            if key in payload:
+                memory_item[key] = payload[key]
+        additional_metadata = {key: value for key, value in payload.items() if key not in core_and_promoted_keys}
+        if additional_metadata:
+            memory_item["metadata"] = additional_metadata
+        if explain:
+            memory_item["score_details"] = {
+                "retrieval": "lexical_fallback",
+                "reason": reason,
+            }
+        results.append(memory_item)
+    return results
+
+
+def _search_without_embedding(
+    vector_store: Any,
+    query: str,
+    filters: Dict[str, Any],
+    limit: int,
+    threshold: float,
+    explain: bool,
+    show_expired: bool,
+    reason: str = "embedding_unavailable",
+) -> list[dict[str, Any]]:
+    listed = vector_store.list(filters=filters, top_k=_LEXICAL_FALLBACK_SCAN_LIMIT)
+    rows = _vector_store_list_rows(listed)
+    return _lexical_results_from_rows(rows, query, limit, threshold, explain, show_expired, reason)
+
+
+def _lexical_results_from_rows(
+    rows: list[Any] | tuple[Any, ...],
+    query: str,
+    limit: int,
+    threshold: float,
+    explain: bool,
+    show_expired: bool,
+    reason: str,
+) -> list[dict[str, Any]]:
+    # Preserve the caller's threshold semantics during degraded retrieval.
+    # Lexical scores are normalized to [0, 1], just like dense scores.
+    effective_threshold = max(float(threshold), 0.0)
+    scored_rows: list[dict[str, Any]] = []
+    for row in rows:
+        payload = getattr(row, "payload", None) or {}
+        if not show_expired and _payload_is_expired(payload):
+            continue
+        score = _lexical_score(query, payload.get("data", ""))
+        if score < effective_threshold:
+            continue
+        scored_rows.append({"id": str(getattr(row, "id", "")), "score": score, "payload": payload})
+    scored_rows.sort(
+        key=lambda item: (
+            -float(item["score"]),
+            str((item.get("payload") or {}).get("updated_at") or ""),
+            str(item.get("id") or ""),
+        )
+    )
+    return _format_lexical_fallback_results(scored_rows[:limit], explain, reason)
+
+
+def _search_pending_embeddings(
+    vector_store: Any,
+    query: str,
+    filters: Dict[str, Any],
+    limit: int,
+    threshold: float,
+    explain: bool,
+    show_expired: bool,
+) -> list[dict[str, Any]]:
+    """Lexically retrieve pending records even when query embedding succeeds."""
+
+    if not _supports_lexical_only_records(vector_store):
+        return []
+
+    pending_filters = dict(filters or {})
+    requested_status = pending_filters.get("embedding_status")
+    if requested_status is not None and requested_status != "pending":
+        return []
+    pending_filters["embedding_status"] = "pending"
+
+    keyword_search = getattr(vector_store, "keyword_search", None)
+    if callable(keyword_search) and _LEXICAL_CJK_RUN.search(query) is None:
+        try:
+            keyword_rows = keyword_search(
+                query=lemmatize_for_bm25(query),
+                top_k=max(limit * 4, 60),
+                filters=pending_filters,
+            )
+        except Exception as exc:
+            logger.debug("Pending keyword search unavailable; using lexical scan (%s)", type(exc).__name__)
+        else:
+            if keyword_rows is not None:
+                return _lexical_results_from_rows(
+                    _vector_store_list_rows(keyword_rows),
+                    query,
+                    limit,
+                    threshold,
+                    explain,
+                    show_expired,
+                    "embedding_pending",
+                )
+
+    try:
+        return _search_without_embedding(
+            vector_store,
+            query,
+            pending_filters,
+            limit,
+            threshold,
+            explain,
+            show_expired,
+            reason="embedding_pending",
+        )
+    except Exception as exc:
+        # This is supplemental to an already successful dense query. A list
+        # failure must not discard the primary results.
+        logger.warning(
+            "Pending-embedding lexical search unavailable; keeping semantic results (%s)",
+            type(exc).__name__,
+        )
+        return []
+
+
+def _merge_memory_search_results(
+    primary: list[dict[str, Any]],
+    supplemental: list[dict[str, Any]],
+    limit: int,
+) -> list[dict[str, Any]]:
+    by_id: dict[str, dict[str, Any]] = {}
+    order: dict[str, int] = {}
+    for index, item in enumerate([*primary, *supplemental]):
+        memory_id = str(item.get("id") or "")
+        if not memory_id:
+            continue
+        existing = by_id.get(memory_id)
+        if existing is None:
+            by_id[memory_id] = item
+            order[memory_id] = index
+            continue
+        if float(item.get("score") or 0.0) > float(existing.get("score") or 0.0):
+            by_id[memory_id] = item
+
+    ranked = sorted(
+        by_id.values(),
+        key=lambda item: (-float(item.get("score") or 0.0), order[str(item["id"])]),
+    )
+    return ranked[:limit]
+
+
 setup_config()
 logger = logging.getLogger(__name__)
 
@@ -1522,6 +1795,7 @@ class Memory(MemoryBase):
         operation_context: Optional[MemoryOperationContext] = None,
         pre_vector_write: Optional[Callable[[int], None]] = None,
         _scope_lock_acquired: bool = False,
+        _embedding_unavailable: bool = False,
     ):
         if operation_context is None and not _scope_lock_acquired:
             if not hasattr(self, "_memory_add_locks"):
@@ -1538,6 +1812,7 @@ class Memory(MemoryBase):
                         prompt=prompt,
                         pre_vector_write=pre_vector_write,
                         _scope_lock_acquired=True,
+                        _embedding_unavailable=_embedding_unavailable,
                     )
             finally:
                 self._memory_add_locks.release(scope, lock)
@@ -1617,7 +1892,21 @@ class Memory(MemoryBase):
                     per_msg_meta["actor_id"] = actor_name
 
                 msg_content = message_dict["content"]
-                msg_embeddings = self.embedding_model.embed(msg_content, "add")
+                if _embedding_unavailable:
+                    msg_embeddings = None
+                    _mark_embedding_pending(per_msg_meta)
+                else:
+                    try:
+                        msg_embeddings = self.embedding_model.embed(msg_content, "add")
+                    except Exception as exc:
+                        if not _supports_lexical_only_records(self.vector_store):
+                            raise
+                        logger.warning(
+                            "Memory embedding unavailable; storing a lexical-only record (%s)",
+                            type(exc).__name__,
+                        )
+                        msg_embeddings = None
+                        _mark_embedding_pending(per_msg_meta)
                 mem_id = self._create_memory(
                     msg_content,
                     {msg_content: msg_embeddings},
@@ -1649,7 +1938,28 @@ class Memory(MemoryBase):
 
         # Phase 1: Existing memory retrieval
         search_filters = {k: v for k, v in filters.items() if k in _SESSION_SCOPE_KEYS and v}
-        query_embedding = self.embedding_model.embed(parsed_messages, "search")
+        try:
+            query_embedding = self.embedding_model.embed(parsed_messages, "search")
+        except Exception as exc:
+            if not _supports_lexical_only_records(self.vector_store):
+                raise
+            # Fact extraction cannot start without a semantic context. Keep the
+            # raw conversation durable so the next lexical search can still use
+            # it, and let a later re-embed restore semantic ranking.
+            logger.warning(
+                "Inference embedding unavailable; storing raw messages lexically (%s)",
+                type(exc).__name__,
+            )
+            return self._add_to_vector_store(
+                messages,
+                metadata,
+                filters,
+                False,
+                prompt=prompt,
+                pre_vector_write=pre_vector_write,
+                _scope_lock_acquired=True,
+                _embedding_unavailable=True,
+            )
         existing_results = self.vector_store.search(
             query=parsed_messages,
             vectors=query_embedding,
@@ -1746,17 +2056,25 @@ class Memory(MemoryBase):
 
         # Phase 4: Batch embed only memories that survived exact deduplication.
         mem_texts = [memory["text"] for memory, _memory_hash in selected_memories]
+        embed_map: dict[str, Any] = {}
         try:
             mem_embeddings_list = self.embedding_model.embed_batch(mem_texts, "add")
-            embed_map = dict(zip(mem_texts, mem_embeddings_list))
-        except Exception:
-            # Fallback: embed individually
-            embed_map = {}
-            for text in mem_texts:
-                try:
-                    embed_map[text] = self.embedding_model.embed(text, "add")
-                except Exception as e:
-                    logger.warning(f"Failed to embed memory text: {e}")
+            embed_map = _embedding_map_from_batch(mem_texts, mem_embeddings_list)
+        except Exception as exc:
+            # Fallback: embed individually when the provider does not support
+            # batching or the batch request fails.
+            logger.warning("Batch memory embedding unavailable; retrying individually (%s)", type(exc).__name__)
+
+        for text in mem_texts:
+            if text in embed_map:
+                continue
+            try:
+                embed_map[text] = self.embedding_model.embed(text, "add")
+            except Exception as exc:
+                if not _supports_lexical_only_records(self.vector_store):
+                    raise
+                logger.warning("Failed to embed memory text; storing lexical-only record (%s)", type(exc).__name__)
+                embed_map[text] = None
 
         # Phase 5: Build vector records.
         records = []  # (memory_id, text, embedding, payload)
@@ -1784,6 +2102,10 @@ class Memory(MemoryBase):
             categories = _normalize_memory_categories(mem.get("categories") or mem.get("category"), allowed_categories)
             if categories:
                 mem_metadata["categories"] = categories
+            if embed_map[text] is None:
+                _mark_embedding_pending(mem_metadata)
+            else:
+                mem_metadata.pop("embedding_status", None)
 
             records.append((memory_id, text, embed_map[text], mem_metadata))
 
@@ -2949,10 +3271,25 @@ class Memory(MemoryBase):
 
         # Step 1: Preprocess query
         query_lemmatized = lemmatize_for_bm25(query)
-        query_entities = extract_entities(query)
 
-        # Step 2: Embed query
-        embeddings = self.embedding_model.embed(query, "search")
+        # Step 2: Embed query. Existing memories remain useful during a
+        # provider outage, so fall back to a filtered lexical scan instead of
+        # turning the whole search into a 502.
+        try:
+            embeddings = self.embedding_model.embed(query, "search")
+        except Exception as exc:
+            logger.warning("Semantic memory search unavailable; using lexical fallback (%s)", type(exc).__name__)
+            return _search_without_embedding(
+                self.vector_store,
+                query,
+                filters,
+                limit,
+                threshold,
+                explain,
+                show_expired,
+            )
+
+        query_entities = extract_entities(query)
 
         # Step 3: Semantic search (over-fetch for scoring pool)
         internal_limit = max(limit * 4, 60)
@@ -3057,7 +3394,16 @@ class Memory(MemoryBase):
 
             original_memories.append(memory_item_dict)
 
-        return original_memories
+        pending_memories = _search_pending_embeddings(
+            self.vector_store,
+            query,
+            filters,
+            limit,
+            threshold,
+            explain,
+            show_expired,
+        )
+        return _merge_memory_search_results(original_memories, pending_memories, limit)
 
     def _compute_entity_boosts(self, query_entities, filters):
         """Compute per-memory entity boosts from entity store search.
@@ -3171,7 +3517,16 @@ class Memory(MemoryBase):
 
         existing_embeddings = {}
         if data is not None:
-            existing_embeddings[data] = self.embedding_model.embed(data, "update")
+            try:
+                existing_embeddings[data] = self.embedding_model.embed(data, "update")
+            except Exception as exc:
+                if not _supports_lexical_only_records(self.vector_store):
+                    raise
+                logger.warning(
+                    "Memory update embedding unavailable; using the lexical fallback if text changed (%s)",
+                    type(exc).__name__,
+                )
+                existing_embeddings[data] = None
 
         self._update_memory(memory_id, data, existing_embeddings, update_metadata)
         display_first_run_notice(self, "sync", "update")
@@ -3398,8 +3753,32 @@ class Memory(MemoryBase):
 
         if data in existing_embeddings:
             embeddings = existing_embeddings[data]
+        elif text_changed:
+            try:
+                embeddings = self.embedding_model.embed(data, "update")
+            except Exception as exc:
+                if not _supports_lexical_only_records(self.vector_store):
+                    raise
+                logger.warning(
+                    "Memory update embedding unavailable; storing lexical-only record (%s)",
+                    type(exc).__name__,
+                )
+                embeddings = None
         else:
-            embeddings = self.embedding_model.embed(data, "update")
+            # Payload-only updates do not need the provider and must retain the
+            # existing dense vector (or the existing pending state).
+            embeddings = None
+
+        if embeddings is not None:
+            # A successful re-embed must make a previously pending record
+            # eligible for dense search again.
+            new_metadata.pop("embedding_status", None)
+        elif text_changed:
+            _mark_embedding_pending(new_metadata)
+        elif existing_memory.payload.get("embedding_status") == "pending":
+            _mark_embedding_pending(new_metadata)
+        else:
+            new_metadata.pop("embedding_status", None)
 
         self.vector_store.update(
             vector_id=memory_id,
@@ -3876,6 +4255,7 @@ class AsyncMemory(MemoryBase):
         infer: bool,
         prompt: Optional[str] = None,
         _scope_lock_acquired: bool = False,
+        _embedding_unavailable: bool = False,
     ):
         if not _scope_lock_acquired:
             if not hasattr(self, "_memory_add_locks"):
@@ -3891,6 +4271,7 @@ class AsyncMemory(MemoryBase):
                         infer,
                         prompt=prompt,
                         _scope_lock_acquired=True,
+                        _embedding_unavailable=_embedding_unavailable,
                     )
             finally:
                 self._memory_add_locks.release(scope, lock)
@@ -3953,7 +4334,21 @@ class AsyncMemory(MemoryBase):
                 if actor_name:
                     per_msg_meta["actor_id"] = actor_name
 
-                msg_embeddings = await asyncio.to_thread(self.embedding_model.embed, msg_content, "add")
+                if _embedding_unavailable:
+                    msg_embeddings = None
+                    _mark_embedding_pending(per_msg_meta)
+                else:
+                    try:
+                        msg_embeddings = await asyncio.to_thread(self.embedding_model.embed, msg_content, "add")
+                    except Exception as exc:
+                        if not _supports_lexical_only_records(self.vector_store):
+                            raise
+                        logger.warning(
+                            "Memory embedding unavailable; storing a lexical-only record (async, %s)",
+                            type(exc).__name__,
+                        )
+                        msg_embeddings = None
+                        _mark_embedding_pending(per_msg_meta)
                 mem_id = await self._create_memory(
                     msg_content,
                     {msg_content: msg_embeddings},
@@ -3985,7 +4380,24 @@ class AsyncMemory(MemoryBase):
 
         # Phase 1: Existing memory retrieval
         search_filters = {k: v for k, v in effective_filters.items() if k in _SESSION_SCOPE_KEYS and v}
-        query_embedding = await asyncio.to_thread(self.embedding_model.embed, parsed_messages, "search")
+        try:
+            query_embedding = await asyncio.to_thread(self.embedding_model.embed, parsed_messages, "search")
+        except Exception as exc:
+            if not _supports_lexical_only_records(self.vector_store):
+                raise
+            logger.warning(
+                "Inference embedding unavailable; storing raw messages lexically (async, %s)",
+                type(exc).__name__,
+            )
+            return await self._add_to_vector_store(
+                messages,
+                metadata,
+                effective_filters,
+                False,
+                prompt=prompt,
+                _scope_lock_acquired=True,
+                _embedding_unavailable=True,
+            )
         existing_results = await asyncio.to_thread(
             self.vector_store.search,
             query=parsed_messages,
@@ -4076,16 +4488,29 @@ class AsyncMemory(MemoryBase):
 
         # Phase 4: Batch embed only memories that survived exact deduplication.
         mem_texts = [memory["text"] for memory, _memory_hash in selected_memories]
+        embed_map: dict[str, Any] = {}
         try:
             mem_embeddings_list = await asyncio.to_thread(self.embedding_model.embed_batch, mem_texts, "add")
-            embed_map = dict(zip(mem_texts, mem_embeddings_list))
-        except Exception:
-            embed_map = {}
-            for text in mem_texts:
-                try:
-                    embed_map[text] = await asyncio.to_thread(self.embedding_model.embed, text, "add")
-                except Exception as e:
-                    logger.warning(f"Failed to embed memory text (async): {e}")
+            embed_map = _embedding_map_from_batch(mem_texts, mem_embeddings_list)
+        except Exception as exc:
+            logger.warning(
+                "Batch memory embedding unavailable; retrying individually (async, %s)",
+                type(exc).__name__,
+            )
+
+        for text in mem_texts:
+            if text in embed_map:
+                continue
+            try:
+                embed_map[text] = await asyncio.to_thread(self.embedding_model.embed, text, "add")
+            except Exception as exc:
+                if not _supports_lexical_only_records(self.vector_store):
+                    raise
+                logger.warning(
+                    "Failed to embed memory text; storing lexical-only record (async, %s)",
+                    type(exc).__name__,
+                )
+                embed_map[text] = None
 
         # Phase 5: Build vector records.
         records = []
@@ -4113,6 +4538,10 @@ class AsyncMemory(MemoryBase):
             categories = _normalize_memory_categories(mem.get("categories") or mem.get("category"), allowed_categories)
             if categories:
                 mem_metadata["categories"] = categories
+            if embed_map[text] is None:
+                _mark_embedding_pending(mem_metadata)
+            else:
+                mem_metadata.pop("embedding_status", None)
 
             records.append((memory_id, text, embed_map[text], mem_metadata))
 
@@ -4740,10 +5169,25 @@ class AsyncMemory(MemoryBase):
 
         # Step 1: Preprocess query (CPU-bound)
         query_lemmatized = await asyncio.to_thread(lemmatize_for_bm25, query)
-        query_entities = await asyncio.to_thread(extract_entities, query)
 
-        # Step 2: Embed query
-        embeddings = await asyncio.to_thread(self.embedding_model.embed, query, "search")
+        # Step 2: Embed query, with the same read-only lexical fallback as the
+        # synchronous search path.
+        try:
+            embeddings = await asyncio.to_thread(self.embedding_model.embed, query, "search")
+        except Exception as exc:
+            logger.warning("Semantic memory search unavailable; using lexical fallback (%s)", type(exc).__name__)
+            return await asyncio.to_thread(
+                _search_without_embedding,
+                self.vector_store,
+                query,
+                filters,
+                limit,
+                threshold,
+                explain,
+                show_expired,
+            )
+
+        query_entities = await asyncio.to_thread(extract_entities, query)
 
         # Step 3: Semantic search (over-fetch)
         internal_limit = max(limit * 4, 60)
@@ -4847,7 +5291,17 @@ class AsyncMemory(MemoryBase):
 
             original_memories.append(memory_item_dict)
 
-        return original_memories
+        pending_memories = await asyncio.to_thread(
+            _search_pending_embeddings,
+            self.vector_store,
+            query,
+            filters,
+            limit,
+            threshold,
+            explain,
+            show_expired,
+        )
+        return _merge_memory_search_results(original_memories, pending_memories, limit)
 
     async def _compute_entity_boosts_async(self, query_entities, filters):
         """Async version of entity boost computation."""
@@ -4958,7 +5412,16 @@ class AsyncMemory(MemoryBase):
 
         existing_embeddings = {}
         if data is not None:
-            embeddings = await asyncio.to_thread(self.embedding_model.embed, data, "update")
+            try:
+                embeddings = await asyncio.to_thread(self.embedding_model.embed, data, "update")
+            except Exception as exc:
+                if not _supports_lexical_only_records(self.vector_store):
+                    raise
+                logger.warning(
+                    "Memory update embedding unavailable; using the lexical fallback if text changed (async, %s)",
+                    type(exc).__name__,
+                )
+                embeddings = None
             existing_embeddings[data] = embeddings
 
         await self._update_memory(memory_id, data, existing_embeddings, update_metadata)
@@ -5208,8 +5671,30 @@ class AsyncMemory(MemoryBase):
 
         if data in existing_embeddings:
             embeddings = existing_embeddings[data]
+        elif text_changed:
+            try:
+                embeddings = await asyncio.to_thread(self.embedding_model.embed, data, "update")
+            except Exception as exc:
+                if not _supports_lexical_only_records(self.vector_store):
+                    raise
+                logger.warning(
+                    "Memory update embedding unavailable; storing lexical-only record (async, %s)",
+                    type(exc).__name__,
+                )
+                embeddings = None
         else:
-            embeddings = await asyncio.to_thread(self.embedding_model.embed, data, "update")
+            # Payload-only updates do not need the provider and must retain the
+            # existing dense vector (or the existing pending state).
+            embeddings = None
+
+        if embeddings is not None:
+            new_metadata.pop("embedding_status", None)
+        elif text_changed:
+            _mark_embedding_pending(new_metadata)
+        elif existing_memory.payload.get("embedding_status") == "pending":
+            _mark_embedding_pending(new_metadata)
+        else:
+            new_metadata.pop("embedding_status", None)
 
         await asyncio.to_thread(
             self.vector_store.update,

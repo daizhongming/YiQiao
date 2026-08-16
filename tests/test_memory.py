@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from mem0 import Memory
+from mem0 import AsyncMemory, Memory
 from mem0.configs.base import MemoryConfig
 from mem0.exceptions import LLMError
 from mem0.memory.main import (
@@ -55,6 +55,419 @@ def test_entity_collection_name_uses_dash_for_s3_vectors():
 
 def test_entity_collection_name_keeps_underscore_for_other_stores():
     assert _entity_collection_name("qdrant", "mem0") == "mem0_entities"
+
+
+def test_search_uses_filtered_lexical_fallback_when_embedding_provider_fails():
+    class Row:
+        def __init__(self, memory_id, text, user_id):
+            self.id = memory_id
+            self.payload = {"data": text, "user_id": user_id, "project_id": "project-a"}
+
+    class Store:
+        def __init__(self):
+            self.rows = [
+                Row("salary", "用户的期望薪资是15k。", "alice"),
+                Row("other-user", "用户的期望薪资是30k。", "bob"),
+                Row("related", "用户的薪资期望为18k。", "alice"),
+            ]
+            self.filters = None
+
+        def list(self, *, filters, top_k):
+            self.filters = (filters, top_k)
+            return [[row for row in self.rows if row.payload["user_id"] == filters["user_id"]]]
+
+    with patch.object(Memory, "__init__", return_value=None):
+        memory = Memory()
+    memory.embedding_model = MagicMock()
+    memory.embedding_model.embed.side_effect = RuntimeError("provider unavailable")
+    memory.vector_store = Store()
+
+    result = memory._search_vector_store(
+        "用户的期望薪资是多少？",
+        {"project_id": "project-a", "user_id": "alice"},
+        limit=3,
+        explain=True,
+    )
+
+    assert [item["id"] for item in result] == ["salary", "related"]
+    assert result[0]["score"] > result[1]["score"]
+    assert result[0]["score_details"] == {
+        "retrieval": "lexical_fallback",
+        "reason": "embedding_unavailable",
+    }
+    assert memory.vector_store.filters == ({"project_id": "project-a", "user_id": "alice"}, 100000)
+
+
+@pytest.mark.asyncio
+async def test_async_search_uses_the_same_lexical_fallback():
+    class Row:
+        id = "salary"
+        payload = {"data": "用户的期望薪资是15k。", "user_id": "alice", "project_id": "project-a"}
+
+    class Store:
+        def list(self, *, filters, top_k):
+            return [[Row()]]
+
+    with patch.object(AsyncMemory, "__init__", return_value=None):
+        memory = AsyncMemory()
+    memory.embedding_model = MagicMock()
+    memory.embedding_model.embed.side_effect = RuntimeError("provider unavailable")
+    memory.vector_store = Store()
+
+    result = await memory._search_vector_store(
+        "用户的期望薪资是多少？",
+        {"project_id": "project-a", "user_id": "alice"},
+        limit=1,
+    )
+
+    assert result[0]["id"] == "salary"
+    assert result[0]["score"] >= 0.05
+
+
+class _PendingSearchStore:
+    supports_lexical_only_records = True
+
+    def __init__(self):
+        self.list_filters = []
+        self.keyword_filters = []
+
+    def search(self, *, query, vectors, top_k, filters):
+        return [MockVectorMemory("dense", {"data": "A semantic result", "user_id": "alice"}, score=0.7)]
+
+    def keyword_search(self, *, query, top_k, filters):
+        self.keyword_filters.append((filters, top_k))
+        if filters.get("embedding_status") != "pending":
+            return []
+        return [
+            MockVectorMemory(
+                "pending",
+                {
+                    "data": "The deployment code is atlas-42",
+                    "user_id": "alice",
+                    "project_id": "project-a",
+                    "embedding_status": "pending",
+                },
+                score=5.0,
+            )
+        ]
+
+    def list(self, *, filters, top_k):
+        self.list_filters.append((filters, top_k))
+        return [
+            [
+                MockVectorMemory(
+                    "pending",
+                    {
+                        "data": "The deployment code is atlas-42",
+                        "user_id": "alice",
+                        "project_id": "project-a",
+                        "embedding_status": "pending",
+                    },
+                )
+            ]
+        ]
+
+
+def _memory_with_pending_search(memory_type):
+    with patch.object(memory_type, "__init__", return_value=None):
+        memory = memory_type()
+    memory.embedding_model = MagicMock()
+    memory.embedding_model.embed.return_value = [0.1, 0.2, 0.3]
+    memory.vector_store = _PendingSearchStore()
+    return memory
+
+
+@patch("mem0.memory.main.extract_entities", return_value=[])
+def test_successful_semantic_search_also_retrieves_pending_records(_mock_extract_entities):
+    memory = _memory_with_pending_search(Memory)
+
+    result = memory._search_vector_store(
+        "deployment code atlas-42",
+        {"project_id": "project-a", "user_id": "alice"},
+        limit=5,
+        explain=True,
+    )
+
+    assert [item["id"] for item in result] == ["pending", "dense"]
+    assert result[0]["score_details"] == {
+        "retrieval": "lexical_fallback",
+        "reason": "embedding_pending",
+    }
+    assert memory.vector_store.list_filters == []
+    assert memory.vector_store.keyword_filters[-1] == (
+        {
+            "project_id": "project-a",
+            "user_id": "alice",
+            "embedding_status": "pending",
+        },
+        60,
+    )
+
+
+@pytest.mark.asyncio
+@patch("mem0.memory.main.extract_entities", return_value=[])
+async def test_async_successful_semantic_search_also_retrieves_pending_records(_mock_extract_entities):
+    memory = _memory_with_pending_search(AsyncMemory)
+
+    result = await memory._search_vector_store(
+        "deployment code atlas-42",
+        {"project_id": "project-a", "user_id": "alice"},
+        limit=5,
+    )
+
+    assert [item["id"] for item in result] == ["pending", "dense"]
+    assert memory.vector_store.list_filters == []
+    assert memory.vector_store.keyword_filters[-1][0]["embedding_status"] == "pending"
+
+
+@patch("mem0.memory.main.extract_entities", return_value=[])
+def test_pending_search_does_not_override_an_explicit_ready_filter(_mock_extract_entities):
+    memory = _memory_with_pending_search(Memory)
+
+    result = memory._search_vector_store(
+        "deployment code atlas-42",
+        {"project_id": "project-a", "user_id": "alice", "embedding_status": "ready"},
+        limit=5,
+    )
+
+    assert [item["id"] for item in result] == ["dense"]
+    assert all(filters.get("embedding_status") != "pending" for filters, _top_k in memory.vector_store.keyword_filters)
+
+
+@patch("mem0.memory.main.extract_entities", return_value=[])
+def test_pending_supplement_failure_keeps_successful_semantic_results(_mock_extract_entities):
+    memory = _memory_with_pending_search(Memory)
+    memory.vector_store.keyword_search = MagicMock(return_value=None)
+    memory.vector_store.list = MagicMock(side_effect=RuntimeError("pending scan unavailable"))
+
+    result = memory._search_vector_store(
+        "deployment code atlas-42",
+        {"project_id": "project-a", "user_id": "alice"},
+        limit=5,
+    )
+
+    assert [item["id"] for item in result] == ["dense"]
+
+
+@pytest.mark.asyncio
+@patch("mem0.memory.main.extract_entities", return_value=[])
+async def test_async_pending_supplement_failure_keeps_successful_semantic_results(_mock_extract_entities):
+    memory = _memory_with_pending_search(AsyncMemory)
+    memory.vector_store.keyword_search = MagicMock(return_value=None)
+    memory.vector_store.list = MagicMock(side_effect=RuntimeError("pending scan unavailable"))
+
+    result = await memory._search_vector_store(
+        "deployment code atlas-42",
+        {"project_id": "project-a", "user_id": "alice"},
+        limit=5,
+    )
+
+    assert [item["id"] for item in result] == ["dense"]
+
+
+class _LexicalOnlyStore:
+    supports_lexical_only_records = True
+
+    def __init__(self):
+        self.inserted = []
+
+    def list(self, *, filters, top_k):
+        return [[]]
+
+    def get(self, vector_id):
+        return None
+
+    def search(self, *, query, vectors, top_k, filters):
+        return []
+
+    def insert(self, *, vectors, ids, payloads):
+        self.inserted.extend(zip(vectors, ids, payloads))
+
+
+def _memory_for_lexical_only_write(memory_type=Memory):
+    with patch.object(memory_type, "__init__", return_value=None):
+        memory = memory_type()
+    memory.embedding_model = MagicMock()
+    memory.embedding_model.embed.side_effect = RuntimeError("provider arrearage")
+    memory.vector_store = _LexicalOnlyStore()
+    memory.db = MagicMock()
+    memory.db.get_last_messages.return_value = []
+    return memory
+
+
+def test_raw_write_stores_lexical_only_record_when_embedding_fails():
+    memory = _memory_for_lexical_only_write()
+
+    result = memory._add_to_vector_store(
+        [{"role": "user", "content": "用户的期望薪资是15k。"}],
+        {"project_id": "project-a"},
+        {"project_id": "project-a", "user_id": "alice"},
+        infer=False,
+        _scope_lock_acquired=True,
+    )
+
+    assert len(result) == 1
+    vector, _memory_id, payload = memory.vector_store.inserted[0]
+    assert vector is None
+    assert payload["data"] == "用户的期望薪资是15k。"
+    assert payload["embedding_status"] == "pending"
+
+
+def test_inference_write_downgrades_to_raw_when_query_embedding_fails():
+    memory = _memory_for_lexical_only_write()
+
+    result = memory._add_to_vector_store(
+        [{"role": "user", "content": "用户的期望薪资是15k。"}],
+        {"project_id": "project-a"},
+        {"project_id": "project-a", "user_id": "alice"},
+        infer=True,
+        _scope_lock_acquired=True,
+    )
+
+    assert len(result) == 1
+    assert memory.embedding_model.embed.call_count == 1
+    assert memory.vector_store.inserted[0][0] is None
+
+
+def _inference_memory_for_embedding_fallback(memory_type=Memory, extracted_texts=None):
+    memory = _memory_for_lexical_only_write(memory_type)
+    memory.custom_instructions = None
+    memory.api_version = "test"
+    memory.vector_store.search = MagicMock(return_value=[])
+    memory.llm = MagicMock()
+    memory.llm.generate_response.return_value = json.dumps(
+        {"memory": [{"text": text} for text in (extracted_texts or ["The user prefers remote work"])]}
+    )
+    return memory
+
+
+def test_inference_write_stores_extracted_memory_when_all_embeddings_fail():
+    memory = _inference_memory_for_embedding_fallback()
+    memory.embedding_model.embed.side_effect = [[0.1, 0.2, 0.3], RuntimeError("provider arrearage")]
+    memory.embedding_model.embed_batch.side_effect = RuntimeError("batch unavailable")
+
+    with patch("mem0.memory.main.extract_entities_batch", return_value=[[]]):
+        result = memory._add_to_vector_store(
+            [{"role": "user", "content": "I prefer remote work."}],
+            {"project_id": "project-a"},
+            {"project_id": "project-a", "user_id": "alice"},
+            infer=True,
+            _scope_lock_acquired=True,
+        )
+
+    assert len(result) == 1
+    vector, _memory_id, payload = memory.vector_store.inserted[0]
+    assert vector is None
+    assert payload["data"] == "The user prefers remote work"
+    assert payload["embedding_status"] == "pending"
+
+
+def test_inference_write_retries_missing_vectors_from_a_short_batch():
+    memory = _inference_memory_for_embedding_fallback(
+        extracted_texts=["The user prefers remote work", "The user uses Python"]
+    )
+    memory.embedding_model.embed.side_effect = [[0.1, 0.2, 0.3], [0.7, 0.8, 0.9]]
+    memory.embedding_model.embed_batch.return_value = [[0.4, 0.5, 0.6]]
+
+    with patch("mem0.memory.main.extract_entities_batch", return_value=[[], []]):
+        result = memory._add_to_vector_store(
+            [{"role": "user", "content": "I prefer remote work and use Python."}],
+            {"project_id": "project-a"},
+            {"project_id": "project-a", "user_id": "alice"},
+            infer=True,
+            _scope_lock_acquired=True,
+        )
+
+    assert len(result) == 2
+    assert [item[0] for item in memory.vector_store.inserted] == [[0.4, 0.5, 0.6], [0.7, 0.8, 0.9]]
+
+
+@pytest.mark.asyncio
+async def test_async_inference_write_stores_extracted_memory_when_all_embeddings_fail():
+    memory = _inference_memory_for_embedding_fallback(AsyncMemory)
+    memory.embedding_model.embed.side_effect = [[0.1, 0.2, 0.3], RuntimeError("provider arrearage")]
+    memory.embedding_model.embed_batch.side_effect = RuntimeError("batch unavailable")
+
+    with patch("mem0.memory.main.extract_entities_batch", return_value=[[]]):
+        result = await memory._add_to_vector_store(
+            [{"role": "user", "content": "I prefer remote work."}],
+            {"project_id": "project-a"},
+            {"project_id": "project-a", "user_id": "alice"},
+            infer=True,
+            _scope_lock_acquired=True,
+        )
+
+    assert len(result) == 1
+    vector, _memory_id, payload = memory.vector_store.inserted[0]
+    assert vector is None
+    assert payload["embedding_status"] == "pending"
+
+
+@pytest.mark.asyncio
+async def test_async_inference_write_retries_missing_vectors_from_a_short_batch():
+    memory = _inference_memory_for_embedding_fallback(
+        AsyncMemory,
+        extracted_texts=["The user prefers remote work", "The user uses Python"],
+    )
+    memory.embedding_model.embed.side_effect = [[0.1, 0.2, 0.3], [0.7, 0.8, 0.9]]
+    memory.embedding_model.embed_batch.return_value = [[0.4, 0.5, 0.6]]
+
+    with patch("mem0.memory.main.extract_entities_batch", return_value=[[], []]):
+        result = await memory._add_to_vector_store(
+            [{"role": "user", "content": "I prefer remote work and use Python."}],
+            {"project_id": "project-a"},
+            {"project_id": "project-a", "user_id": "alice"},
+            infer=True,
+            _scope_lock_acquired=True,
+        )
+
+    assert len(result) == 2
+    assert [item[0] for item in memory.vector_store.inserted] == [[0.4, 0.5, 0.6], [0.7, 0.8, 0.9]]
+
+
+def test_lexical_fallback_honors_a_high_threshold():
+    class Row:
+        id = "partial"
+        payload = {"data": "The candidate prefers remote work", "user_id": "alice"}
+
+    class Store:
+        supports_lexical_only_records = True
+
+        def list(self, *, filters, top_k):
+            return [[Row()]]
+
+    with patch.object(Memory, "__init__", return_value=None):
+        memory = Memory()
+    memory.embedding_model = MagicMock()
+    memory.embedding_model.embed.side_effect = RuntimeError("provider unavailable")
+    memory.vector_store = Store()
+
+    result = memory._search_vector_store(
+        "candidate remote unrelated",
+        {"user_id": "alice"},
+        limit=3,
+        threshold=0.99,
+    )
+
+    assert result == []
+
+
+@pytest.mark.asyncio
+async def test_async_raw_write_stores_lexical_only_record_when_embedding_fails():
+    memory = _memory_for_lexical_only_write(AsyncMemory)
+
+    result = await memory._add_to_vector_store(
+        [{"role": "user", "content": "用户的期望薪资是15k。"}],
+        {"project_id": "project-a"},
+        {"project_id": "project-a", "user_id": "alice"},
+        infer=False,
+        _scope_lock_acquired=True,
+    )
+
+    assert len(result) == 1
+    vector, _memory_id, payload = memory.vector_store.inserted[0]
+    assert vector is None
+    assert payload["embedding_status"] == "pending"
 
 
 def test_session_scope_includes_application_and_project():

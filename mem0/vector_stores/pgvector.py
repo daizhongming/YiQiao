@@ -145,6 +145,10 @@ class OutputData(BaseModel):
 
 
 class PGVector(VectorStoreBase):
+    # PostgreSQL permits a NULL vector while the JSONB payload and lexical
+    # index remain available for read-only fallback search.
+    supports_lexical_only_records = True
+
     def __init__(
         self,
         dbname,
@@ -309,7 +313,7 @@ class PGVector(VectorStoreBase):
                 )
             )
 
-    def insert(self, vectors: list[list[float]], payloads=None, ids=None) -> None:
+    def insert(self, vectors: list[list[float] | None], payloads=None, ids=None) -> None:
         self._ensure_collection()
         logger.info(f"Inserting {len(vectors)} vectors into collection {self.collection_name}")
         json_payloads = [json.dumps(payload) for payload in payloads]
@@ -400,7 +404,11 @@ class PGVector(VectorStoreBase):
         """
         self._ensure_collection()
         filter_conditions, filter_params = _build_filter_conditions(filters)
-        filter_clause = sql.SQL("WHERE " + " AND ".join(filter_conditions)) if filter_conditions else sql.SQL("")
+        # Lexical-only records intentionally have no vector. Keep them in the
+        # collection for list/keyword search, but never feed NULL distances to
+        # the semantic ranking query.
+        semantic_conditions = ["vector IS NOT NULL", *filter_conditions]
+        filter_clause = sql.SQL("WHERE " + " AND ".join(semantic_conditions))
 
         with self._get_cursor() as cur:
             cur.execute(
@@ -484,6 +492,13 @@ class PGVector(VectorStoreBase):
                 cur.execute(
                     sql.SQL("UPDATE {} SET vector = %s WHERE id = %s").format(self._col()),
                     (vector, vector_id),
+                )
+            elif payload is not None and payload.get("embedding_status") == "pending":
+                # Do not leave the old vector attached to newly updated text
+                # when the replacement embedding could not be generated.
+                cur.execute(
+                    sql.SQL("UPDATE {} SET vector = NULL WHERE id = %s").format(self._col()),
+                    (vector_id,),
                 )
             if payload is not None:
                 # Handle JSON serialization based on psycopg version
