@@ -34,7 +34,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable, Sequence
 
-
 DEFAULT_PROJECT_ID = "default-project"
 DEFAULT_BATCH_SIZE = 50
 DEFAULT_LIMIT = 1000

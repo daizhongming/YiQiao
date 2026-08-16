@@ -99,12 +99,10 @@ def test_release_versions_are_synchronized():
     assert mcp_pyproject["project"]["version"] == expected
     assert dashboard["version"] == expected
     assert f'version="{expected}"' in (ROOT / "server" / "main.py").read_text(encoding="utf-8")
-    assert f'yiqiao-mcp/{expected}' in (ROOT / "yiqiao-mcp" / "src" / "yiqiao_mcp" / "rest.py").read_text(
+    assert f"yiqiao-mcp/{expected}" in (ROOT / "yiqiao-mcp" / "src" / "yiqiao_mcp" / "rest.py").read_text(
         encoding="utf-8"
     )
-    assert f"default: v{expected}" in (ROOT / ".github" / "workflows" / "images.yml").read_text(
-        encoding="utf-8"
-    )
+    assert f"default: v{expected}" in (ROOT / ".github" / "workflows" / "images.yml").read_text(encoding="utf-8")
 
 
 def test_versioned_image_publication_is_bound_to_the_release_tag():
