@@ -49,7 +49,7 @@ install-dashboard:
 install-mcp:
 	$(PYTHON) -m venv $(MCP_VENV)
 	$(MCP_PYTHON) -m pip install --upgrade pip
-	$(MCP_PYTHON) -m pip install --editable "./$(MCP_DIR)[test]" ruff==0.16.0 build==1.3.0 twine==6.2.0
+	$(MCP_PYTHON) -m pip install --editable "./$(MCP_DIR)[test]" ruff==0.16.0 build==1.3.0 twine==7.0.0
 	$(MCP_PYTHON) -m pip check
 
 format:
